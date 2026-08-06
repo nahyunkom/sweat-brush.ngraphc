@@ -685,58 +685,126 @@ var camCtx=camCanvas.getContext('2d');
 var stream=null;
 var rafId=null;
 var handsDetector=null;
-var handVisible=false;
 
-/* ── 패턴 원형 프리뷰 ── */
-function drawPatternPreview(){
-  var pv=document.getElementById('pattern-preview');
-  if(!pv) return;
-  var pc=pv.getContext('2d');
-  var S=200;
-  pc.clearRect(0,0,S,S);
-  /* 원형 클립 */
-  pc.save();
-  pc.beginPath();pc.arc(S/2,S/2,S/2,0,Math.PI*2);pc.clip();
-  pc.fillStyle='#111';pc.fillRect(0,0,S,S);
-  /* 드로잉 캔버스 내용 */
-  if(canvas.width>0&&canvas.height>0){
-    pc.drawImage(canvas,0,0,S,S);
-  }
-  pc.restore();
+/* 원형 동그라미 안에 패턴 + 웹캠 합성 루프 */
+function camLoop(){
+  var cw=camCanvas.width, ch=camCanvas.height;
+  var cx=cw/2, cy=ch/2;
+  var R=Math.min(cw,ch)*0.28; /* 동그라미 반지름 */
+
+  camCtx.clearRect(0,0,cw,ch);
+
+  /* 1. 웹캠 화면 (거울 반전) */
+  camCtx.save();
+  camCtx.scale(-1,1);
+  camCtx.translate(-cw,0);
+  camCtx.drawImage(video,0,0,cw,ch);
+  camCtx.restore();
+
+  /* 2. 동그라미 안에 패턴 — 투명도 50% */
+  camCtx.save();
+  camCtx.beginPath();
+  camCtx.arc(cx,cy,R,0,Math.PI*2);
+  camCtx.clip();
+  camCtx.globalAlpha=0.5;
+  camCtx.drawImage(canvas,cx-R,cy-R,R*2,R*2);
+  camCtx.restore();
+
+  /* 3. 동그라미 테두리 */
+  camCtx.save();
+  camCtx.beginPath();
+  camCtx.arc(cx,cy,R,0,Math.PI*2);
+  camCtx.strokeStyle='rgba(255,255,255,0.5)';
+  camCtx.lineWidth=2;
+  camCtx.stroke();
+  camCtx.restore();
+
+  rafId=requestAnimationFrame(camLoop);
 }
 
-/* ── 손 경계 박스 계산 ── */
-function getHandBBox(landmarks,cw,ch){
-  var xs=landmarks.map(function(l){return l.x*cw;});
-  var ys=landmarks.map(function(l){return l.y*ch;});
-  var minX=Math.min.apply(null,xs),maxX=Math.max.apply(null,xs);
-  var minY=Math.min.apply(null,ys),maxY=Math.max.apply(null,ys);
-  var pad=30;
-  return{
-    x:minX-pad,y:minY-pad,
-    w:(maxX-minX)+pad*2,
-    h:(maxY-minY)+pad*2,
-    cx:(minX+maxX)/2,cy:(minY+maxY)/2
-  };
-}
-
-/* ── 손 마스크 — 랜드마크 기반 볼록 다각형 ── */
+/* ── 손 마스크 경로 ── */
 function drawHandMask(ctx,landmarks,cw,ch){
-  /* 손 외곽 포인트 순서 (손바닥 테두리) */
   var outline=[0,1,2,3,4,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5];
   ctx.beginPath();
   outline.forEach(function(i,idx){
     var l=landmarks[i];
-    var x=l.x*cw, y=l.y*ch;
+    var x=(1-l.x)*cw, y=l.y*ch; /* 좌우 반전 (거울 맞춤) */
     if(idx===0) ctx.moveTo(x,y);
     else ctx.lineTo(x,y);
   });
   ctx.closePath();
 }
 
-/* ── MediaPipe 로드 + 감지 루프 ── */
+/* ── 손 감지 결과 처리 ── */
+function onHandResults(results){
+  var cw=camCanvas.width, ch=camCanvas.height;
+  var cx=cw/2, cy=ch/2;
+  var R=Math.min(cw,ch)*0.28;
+  var guide=document.getElementById('cam-guide');
+  var hintText=document.getElementById('cam-hint-text');
+
+  camCtx.clearRect(0,0,cw,ch);
+
+  /* 웹캠 배경 */
+  camCtx.save();
+  camCtx.scale(-1,1);
+  camCtx.translate(-cw,0);
+  camCtx.drawImage(video,0,0,cw,ch);
+  camCtx.restore();
+
+  if(results.multiHandLandmarks&&results.multiHandLandmarks.length>0){
+    if(guide) guide.style.opacity='0';
+    var landmarks=results.multiHandLandmarks[0];
+
+    /* 손 bbox */
+    var xs=landmarks.map(function(l){return(1-l.x)*cw;});
+    var ys=landmarks.map(function(l){return l.y*ch;});
+    var minX=Math.min.apply(null,xs),maxX=Math.max.apply(null,xs);
+    var minY=Math.min.apply(null,ys),maxY=Math.max.apply(null,ys);
+    var pad=28;
+    var bx=minX-pad,by=minY-pad,bw=(maxX-minX)+pad*2,bh=(maxY-minY)+pad*2;
+
+    /* 손 실루엣 클립 → 패턴 타투 */
+    camCtx.save();
+    drawHandMask(camCtx,landmarks,cw,ch);
+    camCtx.clip();
+    camCtx.globalAlpha=0.82;
+    camCtx.drawImage(canvas,bx,by,bw,bh);
+    camCtx.restore();
+
+    /* 손 테두리 */
+    camCtx.save();
+    drawHandMask(camCtx,landmarks,cw,ch);
+    camCtx.strokeStyle='rgba(255,255,255,0.2)';
+    camCtx.lineWidth=2;
+    camCtx.stroke();
+    camCtx.restore();
+
+  } else {
+    if(guide) guide.style.opacity='1';
+    if(hintText) hintText.textContent='손을 화면에 올려주세요';
+
+    /* 손 없을 때 — 동그라미 안에 패턴 */
+    camCtx.save();
+    camCtx.beginPath();
+    camCtx.arc(cx,cy,R,0,Math.PI*2);
+    camCtx.clip();
+    camCtx.globalAlpha=0.5;
+    camCtx.drawImage(canvas,cx-R,cy-R,R*2,R*2);
+    camCtx.restore();
+
+    camCtx.save();
+    camCtx.beginPath();
+    camCtx.arc(cx,cy,R,0,Math.PI*2);
+    camCtx.strokeStyle='rgba(255,255,255,0.5)';
+    camCtx.lineWidth=2;
+    camCtx.stroke();
+    camCtx.restore();
+  }
+}
+
+/* ── MediaPipe 로드 ── */
 function startHandTracking(){
-  /* MediaPipe CDN */
   if(window.Hands){initHands();return;}
   var s1=document.createElement('script');
   s1.src='https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js';
@@ -750,15 +818,15 @@ function startHandTracking(){
 }
 
 function initHands(){
+  if(rafId){cancelAnimationFrame(rafId);rafId=null;} /* 기존 루프 종료 */
   handsDetector=new Hands({locateFile:function(f){
     return 'https://cdn.jsdelivr.net/npm/@mediapipe/hands/'+f;
   }});
   handsDetector.setOptions({maxNumHands:1,modelComplexity:1,minDetectionConfidence:0.7,minTrackingConfidence:0.6});
   handsDetector.onResults(onHandResults);
 
-  /* 감지 루프 */
   function detect(){
-    if(!stream){return;}
+    if(!stream) return;
     handsDetector.send({image:video}).then(function(){
       rafId=requestAnimationFrame(detect);
     });
@@ -766,61 +834,21 @@ function initHands(){
   detect();
 }
 
-function onHandResults(results){
-  var cw=camCanvas.width, ch=camCanvas.height;
-  camCtx.clearRect(0,0,cw,ch);
-
-  var guide=document.getElementById('cam-guide');
-  var hintText=document.getElementById('cam-hint-text');
-
-  if(results.multiHandLandmarks&&results.multiHandLandmarks.length>0){
-    handVisible=true;
-    if(guide) guide.style.opacity='0';
-
-    var landmarks=results.multiHandLandmarks[0];
-    var bbox=getHandBBox(landmarks,cw,ch);
-
-    /* 1. 손 마스크 영역에 패턴 클리핑 */
-    camCtx.save();
-
-    /* 손 실루엣 클리핑 */
-    drawHandMask(camCtx,landmarks,cw,ch);
-    camCtx.clip();
-
-    /* 패턴을 손 bbox에 맞춰 그리기 */
-    camCtx.globalAlpha=0.88;
-    camCtx.globalCompositeOperation='source-over';
-    camCtx.drawImage(canvas,bbox.x,bbox.y,bbox.w,bbox.h);
-
-    camCtx.restore();
-
-    /* 2. 손 경계 살짝 빛나는 테두리 */
-    camCtx.save();
-    drawHandMask(camCtx,landmarks,cw,ch);
-    camCtx.strokeStyle='rgba(255,255,255,0.25)';
-    camCtx.lineWidth=2;
-    camCtx.stroke();
-    camCtx.restore();
-
-    /* 3. 손바닥 중심 랜드마크 점 (옵션) */
-    var wrist=landmarks[0];
-    var mid=landmarks[9];
-    camCtx.beginPath();
-    camCtx.arc(mid.x*cw,mid.y*ch,4,0,Math.PI*2);
-    camCtx.fillStyle='rgba(255,255,255,0.4)';
-    camCtx.fill();
-
-  } else {
-    handVisible=false;
-    if(guide) guide.style.opacity='1';
-    if(hintText) hintText.textContent='손을 화면에 올려주세요';
-  }
-}
-
 function openCam(){
   camWrap.classList.add('show');
-  drawPatternPreview();
   resizeCamCanvas();
+  /* 패턴 프리뷰 원 그리기 */
+  var pv=document.getElementById('pattern-preview');
+  if(pv&&canvas.width>0){
+    var pc=pv.getContext('2d'),S=200;
+    pc.clearRect(0,0,S,S);
+    pc.save();
+    pc.beginPath();pc.arc(S/2,S/2,S/2,0,Math.PI*2);pc.clip();
+    pc.fillStyle='#111';pc.fillRect(0,0,S,S);
+    pc.globalAlpha=0.5;
+    pc.drawImage(canvas,0,0,S,S);
+    pc.restore();
+  }
   navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false})
     .then(function(s){
       stream=s;
@@ -828,6 +856,9 @@ function openCam(){
       video.play();
       video.addEventListener('loadedmetadata',function(){
         resizeCamCanvas();
+        /* 먼저 기본 루프 시작 (MediaPipe 로드 전) */
+        camLoop();
+        /* MediaPipe 로드 — 완료되면 손 감지 모드로 전환 */
         startHandTracking();
       },{once:true});
     })
@@ -867,12 +898,6 @@ function saveShot(){
   a.click();
 }
 window.saveShot=saveShot;
-
-function openCam(){
-  camWrap.classList.add('show');
-  startCam();
-}
-window.openCam=openCam;
 
 
 
