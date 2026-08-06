@@ -741,7 +741,6 @@ function renderDrop(landmarks,cw,ch){
       var py=Math.min(canvas.height-1,Math.floor(landmarks[ti].y*canvas.height));
       var id=canvas.getContext('2d').getImageData(px,py,1,1).data;
       var col=id[3]>20?'rgba('+id[0]+','+id[1]+','+id[2]+',':'rgba(200,160,255,';
-      /* 여러 방울 한 번에 */
       var n=Math.floor(1+Math.random()*3);
       for(var k=0;k<n;k++){
         drops.push({
@@ -753,7 +752,7 @@ function renderDrop(landmarks,cw,ch){
           col:col,
           alpha:0.92,
           trail:[],
-          stretch:1+Math.random()*0.8 /* 세로로 늘어나는 정도 */
+          stretch:1+Math.random()*0.8
         });
       }
     }
@@ -763,9 +762,9 @@ function renderDrop(landmarks,cw,ch){
 
   drops.forEach(function(d){
     d.trail.push({x:d.x,y:d.y});
-    if(d.trail.length>40) d.trail.shift(); /* 꼬리 더 길게 */
+    if(d.trail.length>40) d.trail.shift();
     d.x+=d.vx;
-    d.vy+=0.35; /* 중력 강하게 */
+    d.vy+=0.35;
     d.vx*=0.98;
     d.y+=d.vy;
     d.alpha-=0.006;
@@ -827,91 +826,83 @@ function renderDrop(landmarks,cw,ch){
 
 /* ── 손 삼각형 메시 타투 ── */
 function renderHandMesh(landmarks,cw,ch){
-  function lp(i){return{x:(1-landmarks[i].x)*cw,y:landmarks[i].y*ch};}
+  /* 손 전체 bbox */
+  var xs=[],ys=[];
+  for(var i=0;i<21;i++){
+    xs.push((1-landmarks[i].x)*cw);
+    ys.push(landmarks[i].y*ch);
+  }
+  var mnX=Math.min.apply(null,xs),mxX=Math.max.apply(null,xs);
+  var mnY=Math.min.apply(null,ys),mxY=Math.max.apply(null,ys);
+  var bw=mxX-mnX||1, bh=mxY-mnY||1;
 
-  /* 손가락별 마디 인덱스 */
-  var fingers=[
-    [0,1,2,3,4],   /* 엄지 */
-    [0,5,6,7,8],   /* 검지 */
-    [0,9,10,11,12],/* 중지 */
-    [0,13,14,15,16],/* 약지 */
-    [0,17,18,19,20] /* 새끼 */
-  ];
+  function lp(i){return{x:xs[i],y:ys[i]};}
 
-  /* 손바닥 중심 */
-  var palmPts=[0,1,5,9,13,17].map(lp);
-  var palmCx=palmPts.reduce(function(s,p){return s+p.x;},0)/palmPts.length;
-  var palmCy=palmPts.reduce(function(s,p){return s+p.y;},0)/palmPts.length;
-  var palmC={x:palmCx,y:palmCy};
-
-  /* 패턴 소스 정규화 함수 */
+  /* 패턴 좌표: bbox 기준 정규화 */
   var sw=canvas.width, sh=canvas.height;
-  function srcPt(p){
-    /* 손 전체 bbox 기준으로 패턴 좌표 계산 */
-    var xs=[];var ys=[];
-    for(var i=0;i<21;i++){xs.push((1-landmarks[i].x)*cw);ys.push(landmarks[i].y*ch);}
-    var mnX=Math.min.apply(null,xs),mxX=Math.max.apply(null,xs);
-    var mnY=Math.min.apply(null,ys),mxY=Math.max.apply(null,ys);
-    var nx=(p.x-mnX)/(mxX-mnX+1);
-    var ny=(p.y-mnY)/(mxY-mnY+1);
-    return{x:nx*sw, y:ny*sh};
+  function sp(p){
+    return{
+      x:((p.x-mnX)/bw)*sw,
+      y:((p.y-mnY)/bh)*sh
+    };
   }
 
-  /* 손 전체 마스크 먼저 클립 */
+  /* 손 전체 마스크 클립 */
   camCtx.save();
   drawHandMask(camCtx,landmarks,cw,ch);
   camCtx.clip();
-  camCtx.globalAlpha=0.82;
+  camCtx.globalAlpha=0.88;
 
-  /* 각 손가락 마디별 삼각형 그리기 */
-  fingers.forEach(function(finger){
-    for(var seg=0;seg<finger.length-2;seg++){
-      var a,b,c,d2;
-      if(seg===0){
-        /* 손바닥 → 첫 마디: 손바닥 중심 포함 삼각형 */
-        a=lp(finger[1]);
-        b=lp(finger[Math.min(finger.length-1,2)]);
-        var adj=finger===fingers[0]?lp(finger[2]):palmC;
-        drawTrianglePatch(a,b,adj,srcPt(a),srcPt(b),srcPt(adj));
-      }
-      a=lp(finger[seg+1]);
-      b=lp(finger[Math.min(seg+2,finger.length-1)]);
-      /* 마디 너비 보정 */
-      var perp=perpOffset(a,b,8*(1-seg*0.15));
-      var al={x:a.x-perp.x,y:a.y-perp.y};
-      var ar={x:a.x+perp.x,y:a.y+perp.y};
-      var bl={x:b.x-perp.x,y:b.y-perp.y};
-      var br={x:b.x+perp.x,y:b.y+perp.y};
-      drawTrianglePatch(al,ar,bl,srcPt(al),srcPt(ar),srcPt(bl));
-      drawTrianglePatch(ar,br,bl,srcPt(ar),srcPt(br),srcPt(bl));
-    }
+  /* 삼각형 분할 — 손가락 마디 + 손바닥 */
+  var fingers=[
+    [0,1,2,3,4],
+    [5,6,7,8],
+    [9,10,11,12],
+    [13,14,15,16],
+    [17,18,19,20]
+  ];
+
+  /* 손바닥 삼각형 */
+  var palmBase=[[0,5,9],[0,9,13],[0,13,17],[0,17,5]];
+  palmBase.forEach(function(tri){
+    var d0=lp(tri[0]),d1=lp(tri[1]),d2=lp(tri[2]);
+    patch(d0,d1,d2,sp(d0),sp(d1),sp(d2));
   });
 
-  /* 손바닥 중앙 채우기 */
-  var palmRing=[0,1,5,9,13,17,0].map(lp);
-  for(var pi=0;pi<palmRing.length-2;pi++){
-    drawTrianglePatch(palmC,palmRing[pi],palmRing[pi+1],
-      srcPt(palmC),srcPt(palmRing[pi]),srcPt(palmRing[pi+1]));
-  }
+  /* 각 손가락 마디 삼각형 */
+  fingers.forEach(function(f){
+    /* 손목~첫마디 연결 (엄지 제외) */
+    if(f[0]!==0){
+      var base0=lp(0),base1=lp(f[0]);
+      patch(base0,base1,lp(f[1]),sp(base0),sp(base1),sp(lp(f[1])));
+    }
+    for(var s=0;s<f.length-1;s++){
+      var a=lp(f[s]),b=lp(f[s+1]);
+      /* 마디 너비 오프셋 */
+      var dist=Math.hypot(b.x-a.x,b.y-a.y)||1;
+      var nx=-(b.y-a.y)/dist,ny=(b.x-a.x)/dist;
+      var hw=Math.max(6,12-s*2);
+      var al={x:a.x+nx*hw,y:a.y+ny*hw};
+      var ar={x:a.x-nx*hw,y:a.y-ny*hw};
+      var bl={x:b.x+nx*hw,y:b.y+ny*hw};
+      var br={x:b.x-nx*hw,y:b.y-ny*hw};
+      patch(al,ar,bl,sp(al),sp(ar),sp(bl));
+      patch(ar,br,bl,sp(ar),sp(br),sp(bl));
+    }
+  });
 
   camCtx.restore();
 
   /* 손 윤곽 */
   camCtx.save();
   drawHandMask(camCtx,landmarks,cw,ch);
-  camCtx.strokeStyle='rgba(255,255,255,0.18)';
+  camCtx.strokeStyle='rgba(255,255,255,0.2)';
   camCtx.lineWidth=1.5;
   camCtx.stroke();
   camCtx.restore();
 }
 
-function perpOffset(a,b,dist){
-  var dx=b.x-a.x,dy=b.y-a.y;
-  var len=Math.hypot(dx,dy)||1;
-  return{x:-dy/len*dist,y:dx/len*dist};
-}
-
-function drawTrianglePatch(d0,d1,d2,s0,s1,s2){
+function patch(d0,d1,d2,s0,s1,s2){
   var m=solveAffine(s0,s1,s2,d0,d1,d2);
   if(!m) return;
   camCtx.save();
