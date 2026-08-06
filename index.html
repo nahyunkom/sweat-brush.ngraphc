@@ -65,6 +65,36 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;touch-action:no
 #hint p.s{font-size:12px;color:#1e1e1e;}
 #overlay{position:absolute;inset:0;background:transparent;z-index:40;display:none;}
 #overlay.show{display:block;}
+/* ── 월드 갤러리 ── */
+#world-modal{position:fixed;inset:0;z-index:200;background:#000;display:none;flex-direction:column;overflow:hidden;}
+#world-modal.show{display:flex;}
+#wm-top{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:#0a0a0a;border-bottom:0.5px solid #1a1a1a;flex-shrink:0;}
+#wm-top h2{font-size:15px;font-weight:500;color:#fff;font-family:-apple-system,sans-serif;margin:0;}
+.wm-btn{background:transparent;border:0.5px solid #2a2a2a;border-radius:8px;color:#888;font-size:12px;font-family:-apple-system,sans-serif;padding:7px 14px;cursor:pointer;}
+.wm-btn:hover{border-color:#555;color:#fff;}
+.wm-btn.primary{background:#0a84ff;border-color:#0a84ff;color:#fff;}
+#wm-grid{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;align-content:start;}
+#wm-grid::-webkit-scrollbar{display:none;}
+.wm-card{background:#111;border:0.5px solid #1e1e1e;border-radius:12px;overflow:hidden;cursor:pointer;transition:border-color .2s;}
+.wm-card:hover{border-color:#444;}
+.wm-card canvas{display:block;width:100%;aspect-ratio:3/2;}
+.wm-card-info{padding:10px 12px;}
+.wm-card-name{font-size:13px;font-weight:500;color:#ddd;font-family:-apple-system,sans-serif;margin:0 0 3px;}
+.wm-card-meta{font-size:11px;color:#555;font-family:-apple-system,sans-serif;margin:0;}
+.wm-empty{grid-column:1/-1;text-align:center;color:#333;font-family:-apple-system,sans-serif;font-size:14px;padding:60px 0;}
+/* 업로드 모달 */
+#upload-modal{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;}
+#upload-modal.show{display:flex;}
+#upload-box{background:#111;border:0.5px solid #2a2a2a;border-radius:16px;padding:24px;width:min(360px,90vw);}
+#upload-box h3{font-size:16px;font-weight:500;color:#fff;font-family:-apple-system,sans-serif;margin:0 0 16px;}
+#upload-preview{width:100%;aspect-ratio:3/2;border-radius:8px;overflow:hidden;margin-bottom:14px;background:#0a0a0a;}
+#upload-preview canvas{width:100%;height:100%;display:block;}
+#name-input{width:100%;background:#1a1a1a;border:0.5px solid #2a2a2a;border-radius:8px;color:#fff;font-size:14px;font-family:-apple-system,sans-serif;padding:10px 12px;outline:none;margin-bottom:14px;}
+#name-input::placeholder{color:#444;}
+#name-input:focus{border-color:#555;}
+.upload-row{display:flex;gap:8px;}
+.upload-row button{flex:1;}
+@keyframes panelIn{from{opacity:0;transform:scale(.92) translateY(6px);}to{opacity:1;transform:scale(1) translateY(0);}}
 </style>
 </head>
 <body>
@@ -73,8 +103,8 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;touch-action:no
     <div class="tb-left">
       <button class="tb-btn" onclick="undo()" aria-label="실행취소">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-          <path d="M4 8 Q4 4 9 4 L15 4" stroke="#adadaf" stroke-width="1.5" stroke-linecap="round"/>
-          <path d="M4 8 L7 5 M4 8 L7 11" stroke="#adadaf" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <line x1="17" y1="10" x2="4" y2="10" stroke="#adadaf" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M9 5 L4 10 L9 15" stroke="#adadaf" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
       <button class="tb-btn" onclick="clearCanvas()" aria-label="지우기">
@@ -84,31 +114,32 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;touch-action:no
       </button>
     </div>
     <div class="tb-right">
-      <!-- 내보내기(웹캠) 버튼 -->
-      <button class="tb-btn" id="export-btn" onclick="openCam()" aria-label="웹캠으로 보기">
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-          <rect x="2" y="5" width="13" height="10" rx="2" stroke="#adadaf" stroke-width="1.4"/>
-          <path d="M15 8 L18 6 L18 14 L15 12" stroke="#adadaf" stroke-width="1.4" stroke-linejoin="round"/>
-        </svg>
-      </button>
+      <!-- 브러쉬 버튼 -->
       <button class="tb-btn" id="brush-btn" onclick="togglePanel()" aria-label="브러쉬 선택">
-        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-          <path d="M4 18 Q6 12 12 9 Q18 6 19 3" stroke="#4ca8ff" stroke-width="1.8" stroke-linecap="round"/>
-          <circle cx="4.5" cy="17.5" r="2.5" fill="#4ca8ff"/>
-          <path d="M15 5 L17 7" stroke="#4ca8ff" stroke-width="1.4" stroke-linecap="round"/>
+        <svg width="22" height="22" viewBox="0 0 653.62 595.28" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#adadaf" d="M578.41,71.73c1.69,1.77-10.32,18.61-12.16,21.27-35.6,51.63-82.71,105.84-124.06,153.4-33.15,38.13-76.15,89.4-114.82,120.72-13.4,10.85-28.33,16.36-43.13,24.79-1.14.41-2.22.39-3.26-.28-.65-.41-6.15-10.95-7.74-13.23-6.93-9.93-15.26-19.01-25.26-25.86,14.82-33.97,42.83-58.44,69.93-82.72,58-51.97,123.4-103.05,186.33-149.01,17.02-12.43,34.99-25.84,52.69-37.13,2.32-1.48,20.55-12.91,21.47-11.95Z"/>
+          <path fill="#adadaf" d="M74.41,509.86c-.47-2.59.37-1.54,1.42-2.07,17.46-8.91,30.38-19.71,42.48-35.36,18-23.28,24.07-52.8,43.42-75.35,14.53-16.93,45.4-36.94,67.29-23.36,10.31,6.4,34.6,34.56,33.98,46.68-.46,8.97-10.37,33.55-14.75,42.24-34.97,69.43-108.03,70.77-173.84,47.21Z"/>
         </svg>
       </button>
-      <button class="tb-btn" aria-label="스머지">
+      <!-- 내보내기 버튼 -->
+      <button class="tb-btn" id="export-btn" onclick="openExport()" aria-label="월드에 올리기" style="position:relative;">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-          <path d="M3 17 Q8 8 17 4" stroke="#adadaf" stroke-width="1.5" stroke-linecap="round"/>
-          <path d="M6 17 Q10 11 16 8" stroke="#adadaf" stroke-width="1" stroke-linecap="round" opacity=".5"/>
+          <line x1="10" y1="13" x2="10" y2="3" stroke="#adadaf" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M6.5 6.5 L10 3 L13.5 6.5" stroke="#adadaf" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M6 8.5 L3.5 8.5 Q3 8.5 3 9 L3 16.5 Q3 17 3.5 17 L16.5 17 Q17 17 17 16.5 L17 9 Q17 8.5 16.5 8.5 L14 8.5" stroke="#adadaf" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <button class="tb-btn" aria-label="지우개">
+      <!-- 웹캠 버튼 -->
+      <button class="tb-btn" id="cam-btn" onclick="openCam()" aria-label="웹캠으로 보기">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-          <rect x="3" y="8" width="14" height="8" rx="2" stroke="#adadaf" stroke-width="1.4"/>
-          <line x1="9" y1="8" x2="9" y2="16" stroke="#adadaf" stroke-width="1"/>
+          <circle cx="10" cy="10" r="4" stroke="#adadaf" stroke-width="1.4"/>
+          <circle cx="10" cy="10" r="7.5" stroke="#adadaf" stroke-width="1.4"/>
+          <circle cx="15.5" cy="4.5" r="1.2" fill="#adadaf"/>
         </svg>
+      </button>
+      <!-- 월드 갤러리 버튼 -->
+      <button class="tb-btn" id="world-btn" onclick="openWorld()" aria-label="월드 갤러리">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="#adadaf" stroke-width="1.4"/><path d="M10 2 Q7 6 7 10 Q7 14 10 18" stroke="#adadaf" stroke-width="1" fill="none"/><path d="M10 2 Q13 6 13 10 Q13 14 10 18" stroke="#adadaf" stroke-width="1" fill="none"/><line x1="2" y1="10" x2="18" y2="10" stroke="#adadaf" stroke-width="1"/></svg>
       </button>
     </div>
   </div>
@@ -134,20 +165,21 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;touch-action:no
 
     <!-- 웹캠 모드 -->
     <div id="cam-wrap">
-      <div id="cam-msg" id="cam-msg" style="display:none;">
-        <p>카메라 접근 권한이 필요해요</p>
-        <button onclick="startCam()">카메라 켜기</button>
-      </div>
       <video id="cam-video" autoplay playsinline muted></video>
+      <!-- 손 감지 + 패턴 합성 캔버스 -->
       <canvas id="cam-overlay"></canvas>
-      <div id="cam-bar">
-        <div id="opacity-ctrl">
-          <span>드로잉 투명도</span>
-          <input type="range" id="ov-slider" min="10" max="100" value="75">
-          <span id="ov-val">75%</span>
+      <!-- 대기 화면: 패턴 원형 프리뷰 + 안내 -->
+      <div id="cam-guide" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;">
+        <div style="position:relative;width:200px;height:200px;margin-bottom:24px;">
+          <canvas id="pattern-preview" width="200" height="200" style="border-radius:50%;display:block;"></canvas>
+          <div style="position:absolute;inset:0;border-radius:50%;border:2px solid rgba(255,255,255,0.3);"></div>
         </div>
+        <p id="cam-hint-text" style="font-size:15px;color:rgba(255,255,255,0.7);font-family:-apple-system,sans-serif;letter-spacing:.02em;">손을 화면에 올려주세요</p>
+      </div>
+      <!-- 하단 컨트롤 -->
+      <div id="cam-bar">
         <button class="cam-btn" onclick="closeCam()">← 돌아가기</button>
-        <button class="cam-btn primary" onclick="saveShot()">📸 저장</button>
+        <button class="cam-btn primary" onclick="saveShot()">저장</button>
       </div>
     </div>
 
@@ -312,8 +344,8 @@ var BRUSHES=[
       }
     }
   },
-  {num:'05',name:'축구 · 운동 모임',sub:'에어브러쉬 확산 · 녹황색 안개',colors:['#8F9475','#757a5e','#5c6048'],
-    draw:function(x,y,p,t){var c=pick(this.colors,t),s=bSize*(1.8+p*1.4),a=bOpacity*(0.12+p*0.13);
+  {num:'05',name:'축구 · 운동 모임',sub:'에어브러쉬 확산 · 녹황색 안개',colors:['#F85840','#d84030','#b83020'],
+    draw:function(x,y,p,t){var c=pick(this.colors,t),s=bSize*(0.3+p*0.3),a=bOpacity*(0.12+p*0.13);
       /* 넓은 안개 베이스 */
       var m=ctx.createRadialGradient(x,y,0,x,y,s*3.5);m.addColorStop(0,rgba(c,a*.5));m.addColorStop(0.5,rgba(c,a*.15));m.addColorStop(1,rgba(c,0));ctx.beginPath();ctx.arc(x,y,s*3.5,0,Math.PI*2);ctx.fillStyle=m;ctx.fill();
       /* 중간 확산 레이어 */
@@ -327,7 +359,7 @@ var BRUSHES=[
         var pa=a*(0.4+Math.random()*0.5);
         ctx.beginPath();ctx.arc(x+Math.cos(ang)*dist,y+Math.sin(ang)*dist,pr,0,Math.PI*2);ctx.fillStyle=rgba(c,pa);ctx.fill();
       }},
-    preview:function(pc){var g=pc.createRadialGradient(50,22,0,50,22,40);g.addColorStop(0,'rgba(143,148,117,.6)');g.addColorStop(0.5,'rgba(143,148,117,.2)');g.addColorStop(1,'rgba(143,148,117,0)');pc.beginPath();pc.arc(50,22,40,0,Math.PI*2);pc.fillStyle=g;pc.fill();}
+    preview:function(pc){var g=pc.createRadialGradient(50,22,0,50,22,40);g.addColorStop(0,'rgba(248,88,64,.6)');g.addColorStop(0.5,'rgba(248,88,64,.2)');g.addColorStop(1,'rgba(248,88,64,0)');pc.beginPath();pc.arc(50,22,40,0,Math.PI*2);pc.fillStyle=g;pc.fill();}
   },
   {num:'06',name:'운동 · 무대',sub:'반짝이는 수채화 · 따뜻한 황금빛',colors:['#F6F0BC','#ddd898','#c0bc70'],
     draw:function(x,y,p,t){
@@ -417,12 +449,27 @@ var BRUSHES=[
     draw:function(x,y,p,t){
       var c=pick(this.colors,t),s=bSize*(0.7+p*0.55),a=Math.min(bOpacity*(0.7+p*0.25),0.95);
       ctx.beginPath();ctx.arc(x,y,s*0.7,0,Math.PI*2);ctx.fillStyle=rgba(c,a*0.9);ctx.fill();
+      var vividColors=['248,88,64','255,180,0','0,210,120','80,160,255','200,80,255','255,80,160','0,220,220','255,120,0'];
       var nScratch=Math.floor(4+p*8),mainAng=(Math.random()-.5)*Math.PI*0.5;
-      for(var i=0;i<nScratch;i++){var sang=mainAng+(Math.random()-.5)*0.4,sl=s*(0.4+Math.random()*0.8),sx2=x+(Math.random()-.5)*s*0.6,sy2=y+(Math.random()-.5)*s*0.6;ctx.beginPath();ctx.moveTo(sx2,sy2);ctx.lineTo(sx2+Math.cos(sang)*sl,sy2+Math.sin(sang)*sl);ctx.strokeStyle='rgba(20,20,20,'+(0.12+Math.random()*0.18)+')';ctx.lineWidth=0.5+Math.random()*1.5;ctx.lineCap='round';ctx.stroke();}
+      for(var i=0;i<nScratch;i++){
+        var sc=vividColors[Math.floor(Math.random()*vividColors.length)];
+        var sang=mainAng+(Math.random()-.5)*0.4,sl=s*(0.4+Math.random()*0.8),sx2=x+(Math.random()-.5)*s*0.6,sy2=y+(Math.random()-.5)*s*0.6;
+        ctx.beginPath();ctx.moveTo(sx2,sy2);ctx.lineTo(sx2+Math.cos(sang)*sl,sy2+Math.sin(sang)*sl);
+        ctx.strokeStyle='rgba('+sc+','+(0.3+Math.random()*0.4)+')';ctx.lineWidth=0.5+Math.random()*1.5;ctx.lineCap='round';ctx.stroke();
+      }
       var nEdge=Math.floor(3+p*5);
       for(var i=0;i<nEdge;i++){var ang=Math.random()*Math.PI*2,ex=x+Math.cos(ang)*s*(0.5+Math.random()*0.4),ey=y+Math.sin(ang)*s*(0.5+Math.random()*0.4);ctx.save();ctx.translate(ex,ey);ctx.rotate(ang);ctx.scale(1,0.3+Math.random()*0.4);ctx.beginPath();ctx.arc(0,0,s*(0.1+Math.random()*0.18),0,Math.PI*2);ctx.fillStyle=rgba(c,a*(0.4+Math.random()*0.4));ctx.fill();ctx.restore();}
     },
-    preview:function(pc){pc.beginPath();pc.ellipse(50,22,32,14,0,0,Math.PI*2);pc.fillStyle='rgba(247,248,242,.85)';pc.fill();for(var i=0;i<8;i++){var ang=(Math.random()-.5)*0.5,sl=10+Math.random()*20,sx=20+Math.random()*60,sy=12+Math.random()*20;pc.beginPath();pc.moveTo(sx,sy);pc.lineTo(sx+Math.cos(ang)*sl,sy+Math.sin(ang)*sl);pc.strokeStyle='rgba(20,20,20,'+(0.1+Math.random()*0.2)+')';pc.lineWidth=0.8+Math.random()*1.5;pc.stroke();}}
+    preview:function(pc){
+      var vividColors=['248,88,64','255,180,0','0,210,120','80,160,255','200,80,255','255,80,160','0,220,220','255,120,0'];
+      pc.beginPath();pc.ellipse(50,22,32,14,0,0,Math.PI*2);pc.fillStyle='rgba(247,248,242,.85)';pc.fill();
+      for(var i=0;i<8;i++){
+        var sc=vividColors[Math.floor(Math.random()*vividColors.length)];
+        var ang=(Math.random()-.5)*0.5,sl=10+Math.random()*20,sx=20+Math.random()*60,sy=12+Math.random()*20;
+        pc.beginPath();pc.moveTo(sx,sy);pc.lineTo(sx+Math.cos(ang)*sl,sy+Math.sin(ang)*sl);
+        pc.strokeStyle='rgba('+sc+','+(0.25+Math.random()*0.35)+')';pc.lineWidth=0.8+Math.random()*1.5;pc.stroke();
+      }
+    }
   },
   {num:'12',name:'화장 무너짐 · 번들거림',sub:'글리터 잉크 · 번들거리는 피부',colors:['#CBC308','#a8a000','#888000'],
     draw:function(x,y,p,t){
@@ -446,7 +493,41 @@ var list=document.getElementById('brush-list');
 BRUSHES.forEach(function(b,i){
   var item=document.createElement('div');item.className='bl-item'+(i===0?' on':'');
   var prev=document.createElement('div');prev.className='bl-preview';
-  var pc=document.createElement('canvas');pc.width=100;pc.height=44;prev.appendChild(pc);b.preview(pc.getContext('2d'));
+  var pc=document.createElement('canvas');pc.width=100;pc.height=44;prev.appendChild(pc);
+  /* 실제 draw로 일직선 획 그리기 */
+  (function(brushIdx, canvasEl){
+    var pctx=canvasEl.getContext('2d');
+    var W=100, H=44;
+    pctx.fillStyle='#000';
+    pctx.fillRect(0,0,W,H);
+
+    /* 임시로 bSize/bOpacity/ctx 교체 */
+    var _bSize=bSize, _bOpacity=bOpacity, _ctx=ctx;
+    bSize=10; bOpacity=0.9; ctx=pctx;
+
+    /* 왼→오 일직선으로 획 */
+    var steps=18;
+    var t=0;
+    for(var s=0;s<=steps;s++){
+      var px=8+s*(W-16)/steps;
+      var py=H/2;
+      var pressure=0.6;
+      BRUSHES[brushIdx].draw(px,py,pressure,t);
+      t+=0.08;
+    }
+
+    /* 원본 복원 */
+    bSize=_bSize; bOpacity=_bOpacity; ctx=_ctx;
+
+    /* 흑백 변환 */
+    var imgData=pctx.getImageData(0,0,W,H);
+    var d=imgData.data;
+    for(var i=0;i<d.length;i+=4){
+      var brightness=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+      d[i]=d[i+1]=d[i+2]=brightness;
+    }
+    pctx.putImageData(imgData,0,0);
+  })(BRUSHES.indexOf(b), pc);
   var info=document.createElement('div');info.className='bl-info';
   info.innerHTML='<div class="bl-num">'+b.num+'</div><div class="bl-name">'+b.name+'</div><div class="bl-sub">'+b.sub+'</div>';
   item.appendChild(prev);item.appendChild(info);
@@ -470,6 +551,7 @@ var cw=document.getElementById('cw');
 var hint=document.getElementById('hint');
 var W,H,painting=false,lastX=0,lastY=0,lastP=0.5,pts=[],gone=false;
 var bSize=22,bOpacity=0.65,elapsed=0,strokeStart=0,currentBrush=0;
+window._getCurrentBrush=function(){return currentBrush;};
 var history=[];
 
 function resize(){
@@ -497,31 +579,248 @@ canvas.addEventListener('mouseup',stop);
 canvas.addEventListener('mouseleave',stop);
 document.getElementById('sz').addEventListener('input',function(){bSize=+this.value;});
 document.getElementById('op').addEventListener('input',function(){bOpacity=+this.value/100;});
-window.clearCanvas=function(){ctx.clearRect(0,0,W,H);history=[];elapsed=0;};
+window.clearCanvas=function(){ctx.clearRect(0,0,W,H);history=[];elapsed=0;localStorage.removeItem('sweat_autosave');};
 window.undo=function(){if(history.length){ctx.putImageData(history.pop(),0,0);}};
+
+/* ── 자동저장 ── */
+var autoSaveTimer=null;
+var autoSaveIndicator=null;
+
+function createAutoSaveIndicator(){
+  var el=document.createElement('div');
+  el.id='autosave-indicator';
+  el.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(20,20,20,.85);border:0.5px solid #2a2a2a;border-radius:20px;padding:5px 14px;font-size:11px;color:#555;font-family:-apple-system,sans-serif;pointer-events:none;opacity:0;transition:opacity .3s;z-index:999;';
+  document.body.appendChild(el);
+  return el;
+}
+
+function showAutoSaveMsg(msg){
+  if(!autoSaveIndicator) autoSaveIndicator=createAutoSaveIndicator();
+  autoSaveIndicator.textContent=msg;
+  autoSaveIndicator.style.opacity='1';
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer=setTimeout(function(){autoSaveIndicator.style.opacity='0';},1800);
+}
+
+function doAutoSave(){
+  if(!W||!H) return;
+  /* 캔버스가 비어있으면 저장 안 함 */
+  var data=ctx.getImageData(0,0,W,H).data;
+  var hasContent=false;
+  for(var i=0;i<data.length;i+=4){if(data[i]>10||data[i+1]>10||data[i+2]>10){hasContent=true;break;}}
+  if(!hasContent) return;
+  try{
+    var tmp=document.createElement('canvas');
+    var ratio=Math.min(800/W,1);
+    tmp.width=Math.round(W*ratio);tmp.height=Math.round(H*ratio);
+    var tc=tmp.getContext('2d');
+    tc.fillStyle='#000';tc.fillRect(0,0,tmp.width,tmp.height);
+    tc.drawImage(canvas,0,0,tmp.width,tmp.height);
+    localStorage.setItem('sweat_autosave',tmp.toDataURL('image/jpeg',0.8));
+    localStorage.setItem('sweat_autosave_time',Date.now());
+    showAutoSaveMsg('자동 저장됨');
+  }catch(e){/* 저장 공간 부족 시 무시 */}
+}
+
+/* 30초마다 자동저장 */
+setInterval(doAutoSave, 30000);
+
+/* 그릴 때마다 30초 디바운스 저장 */
+var drawSaveTimer=null;
+var origStart=canvas.onmousedown;
+function scheduleAutoSave(){
+  clearTimeout(drawSaveTimer);
+  drawSaveTimer=setTimeout(doAutoSave,30000);
+}
+canvas.addEventListener('mouseup',scheduleAutoSave);
+canvas.addEventListener('touchend',scheduleAutoSave,{passive:true});
+
+/* 페이지 닫기 전 저장 */
+window.addEventListener('beforeunload',doAutoSave);
+
+/* ── 복원 확인 ── */
+(function(){
+  var saved=localStorage.getItem('sweat_autosave');
+  var savedTime=localStorage.getItem('sweat_autosave_time');
+  if(!saved) return;
+  var d=new Date(parseInt(savedTime));
+  var ds=(d.getMonth()+1)+'/'+d.getDate()+' '+(d.getHours()<10?'0':'')+d.getHours()+':'+(d.getMinutes()<10?'0':'')+d.getMinutes();
+  /* 복원 팝업 */
+  var popup=document.createElement('div');
+  popup.style.cssText='position:fixed;top:70px;left:50%;transform:translateX(-50%);background:rgba(14,14,14,.97);border:0.5px solid #2a2a2a;border-radius:14px;padding:16px 20px;z-index:500;font-family:-apple-system,sans-serif;display:flex;flex-direction:column;gap:10px;min-width:260px;';
+  popup.innerHTML='<p style="font-size:13px;color:#ccc;margin:0;">마지막 작업을 복원할까요?</p><p style="font-size:11px;color:#555;margin:0;">'+ds+'에 자동 저장된 내용</p>';
+  var btns=document.createElement('div');
+  btns.style.cssText='display:flex;gap:8px;';
+  var yes=document.createElement('button');
+  yes.textContent='복원하기';
+  yes.style.cssText='flex:1;background:#0a84ff;border:none;border-radius:8px;color:#fff;font-size:12px;font-family:-apple-system,sans-serif;padding:8px;cursor:pointer;';
+  var no=document.createElement('button');
+  no.textContent='새로 시작';
+  no.style.cssText='flex:1;background:transparent;border:0.5px solid #2a2a2a;border-radius:8px;color:#666;font-size:12px;font-family:-apple-system,sans-serif;padding:8px;cursor:pointer;';
+  yes.onclick=function(){
+    var img=new Image();
+    img.onload=function(){
+      ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+      ctx.drawImage(img,0,0,W,H);
+      document.body.removeChild(popup);
+      showAutoSaveMsg('복원 완료');
+    };
+    img.src=saved;
+  };
+  no.onclick=function(){
+    localStorage.removeItem('sweat_autosave');
+    localStorage.removeItem('sweat_autosave_time');
+    document.body.removeChild(popup);
+  };
+  btns.appendChild(yes);btns.appendChild(no);
+  popup.appendChild(btns);
+  document.body.appendChild(popup);
+})();
 
 /* ── 웹캠 모드 ── */
 var camWrap=document.getElementById('cam-wrap');
 var video=document.getElementById('cam-video');
 var camCanvas=document.getElementById('cam-overlay');
 var camCtx=camCanvas.getContext('2d');
-var ovSlider=document.getElementById('ov-slider');
-var ovVal=document.getElementById('ov-val');
 var stream=null;
 var rafId=null;
-var ovOpacity=0.75;
+var handsDetector=null;
+var handVisible=false;
 
-ovSlider.addEventListener('input',function(){ovOpacity=+this.value/100;ovVal.textContent=this.value+'%';});
+/* ── 패턴 원형 프리뷰 ── */
+function drawPatternPreview(){
+  var pv=document.getElementById('pattern-preview');
+  if(!pv) return;
+  var pc=pv.getContext('2d');
+  var S=200;
+  pc.clearRect(0,0,S,S);
+  /* 원형 클립 */
+  pc.save();
+  pc.beginPath();pc.arc(S/2,S/2,S/2,0,Math.PI*2);pc.clip();
+  pc.fillStyle='#111';pc.fillRect(0,0,S,S);
+  /* 드로잉 캔버스 내용 */
+  if(canvas.width>0&&canvas.height>0){
+    pc.drawImage(canvas,0,0,S,S);
+  }
+  pc.restore();
+}
+
+/* ── 손 경계 박스 계산 ── */
+function getHandBBox(landmarks,cw,ch){
+  var xs=landmarks.map(function(l){return l.x*cw;});
+  var ys=landmarks.map(function(l){return l.y*ch;});
+  var minX=Math.min.apply(null,xs),maxX=Math.max.apply(null,xs);
+  var minY=Math.min.apply(null,ys),maxY=Math.max.apply(null,ys);
+  var pad=30;
+  return{
+    x:minX-pad,y:minY-pad,
+    w:(maxX-minX)+pad*2,
+    h:(maxY-minY)+pad*2,
+    cx:(minX+maxX)/2,cy:(minY+maxY)/2
+  };
+}
+
+/* ── 손 마스크 — 랜드마크 기반 볼록 다각형 ── */
+function drawHandMask(ctx,landmarks,cw,ch){
+  /* 손 외곽 포인트 순서 (손바닥 테두리) */
+  var outline=[0,1,2,3,4,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5];
+  ctx.beginPath();
+  outline.forEach(function(i,idx){
+    var l=landmarks[i];
+    var x=l.x*cw, y=l.y*ch;
+    if(idx===0) ctx.moveTo(x,y);
+    else ctx.lineTo(x,y);
+  });
+  ctx.closePath();
+}
+
+/* ── MediaPipe 로드 + 감지 루프 ── */
+function startHandTracking(){
+  /* MediaPipe CDN */
+  if(window.Hands){initHands();return;}
+  var s1=document.createElement('script');
+  s1.src='https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js';
+  s1.onload=function(){
+    var s2=document.createElement('script');
+    s2.src='https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js';
+    s2.onload=initHands;
+    document.head.appendChild(s2);
+  };
+  document.head.appendChild(s1);
+}
+
+function initHands(){
+  handsDetector=new Hands({locateFile:function(f){
+    return 'https://cdn.jsdelivr.net/npm/@mediapipe/hands/'+f;
+  }});
+  handsDetector.setOptions({maxNumHands:1,modelComplexity:1,minDetectionConfidence:0.7,minTrackingConfidence:0.6});
+  handsDetector.onResults(onHandResults);
+
+  /* 감지 루프 */
+  function detect(){
+    if(!stream){return;}
+    handsDetector.send({image:video}).then(function(){
+      rafId=requestAnimationFrame(detect);
+    });
+  }
+  detect();
+}
+
+function onHandResults(results){
+  var cw=camCanvas.width, ch=camCanvas.height;
+  camCtx.clearRect(0,0,cw,ch);
+
+  var guide=document.getElementById('cam-guide');
+  var hintText=document.getElementById('cam-hint-text');
+
+  if(results.multiHandLandmarks&&results.multiHandLandmarks.length>0){
+    handVisible=true;
+    if(guide) guide.style.opacity='0';
+
+    var landmarks=results.multiHandLandmarks[0];
+    var bbox=getHandBBox(landmarks,cw,ch);
+
+    /* 1. 손 마스크 영역에 패턴 클리핑 */
+    camCtx.save();
+
+    /* 손 실루엣 클리핑 */
+    drawHandMask(camCtx,landmarks,cw,ch);
+    camCtx.clip();
+
+    /* 패턴을 손 bbox에 맞춰 그리기 */
+    camCtx.globalAlpha=0.88;
+    camCtx.globalCompositeOperation='source-over';
+    camCtx.drawImage(canvas,bbox.x,bbox.y,bbox.w,bbox.h);
+
+    camCtx.restore();
+
+    /* 2. 손 경계 살짝 빛나는 테두리 */
+    camCtx.save();
+    drawHandMask(camCtx,landmarks,cw,ch);
+    camCtx.strokeStyle='rgba(255,255,255,0.25)';
+    camCtx.lineWidth=2;
+    camCtx.stroke();
+    camCtx.restore();
+
+    /* 3. 손바닥 중심 랜드마크 점 (옵션) */
+    var wrist=landmarks[0];
+    var mid=landmarks[9];
+    camCtx.beginPath();
+    camCtx.arc(mid.x*cw,mid.y*ch,4,0,Math.PI*2);
+    camCtx.fillStyle='rgba(255,255,255,0.4)';
+    camCtx.fill();
+
+  } else {
+    handVisible=false;
+    if(guide) guide.style.opacity='1';
+    if(hintText) hintText.textContent='손을 화면에 올려주세요';
+  }
+}
 
 function openCam(){
   camWrap.classList.add('show');
-  startCam();
-}
-window.openCam=openCam;
-
-function startCam(){
-  document.getElementById('cam-msg') && (document.getElementById('cam-msg').style.display='none');
-  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){alert('이 브라우저는 카메라를 지원하지 않아요.\nSafari 최신 버전을 사용해주세요.');return;}
+  drawPatternPreview();
+  resizeCamCanvas();
   navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false})
     .then(function(s){
       stream=s;
@@ -529,42 +828,25 @@ function startCam(){
       video.play();
       video.addEventListener('loadedmetadata',function(){
         resizeCamCanvas();
-        startComposite();
+        startHandTracking();
       },{once:true});
     })
     .catch(function(err){
-      var msg=document.getElementById('cam-msg');
-      if(msg)msg.style.display='flex';
       console.warn('카메라 오류:',err);
+      alert('카메라 권한을 허용해주세요.\nSafari: 설정 > Safari > 카메라 > 허용');
     });
 }
-window.startCam=startCam;
+window.openCam=openCam;
 
 function resizeCamCanvas(){
   var r=camWrap.getBoundingClientRect();
-  camCanvas.width=r.width;
-  camCanvas.height=r.height;
-}
-
-function startComposite(){
-  if(rafId)cancelAnimationFrame(rafId);
-  function frame(){
-    var cw2=camCanvas.width,ch=camCanvas.height;
-    camCtx.clearRect(0,0,cw2,ch);
-    /* 드로잉 레이어를 웹캠 위에 오버레이 — 좌우 반전(거울) 맞춤 */
-    camCtx.save();
-    camCtx.scale(-1,1);
-    camCtx.translate(-cw2,0);
-    camCtx.globalAlpha=ovOpacity;
-    camCtx.drawImage(canvas,0,0,cw2,ch);
-    camCtx.restore();
-    rafId=requestAnimationFrame(frame);
-  }
-  frame();
+  camCanvas.width=r.width||window.innerWidth;
+  camCanvas.height=r.height||window.innerHeight;
 }
 
 function closeCam(){
   if(rafId){cancelAnimationFrame(rafId);rafId=null;}
+  if(handsDetector){handsDetector.close();handsDetector=null;}
   if(stream){stream.getTracks().forEach(function(t){t.stop();});stream=null;}
   video.srcObject=null;
   camWrap.classList.remove('show');
@@ -572,30 +854,558 @@ function closeCam(){
 window.closeCam=closeCam;
 
 function saveShot(){
-  /* 웹캠 + 드로잉 합성 후 저장 */
   var tmp=document.createElement('canvas');
   tmp.width=camCanvas.width;tmp.height=camCanvas.height;
   var tc=tmp.getContext('2d');
-  /* 웹캠 프레임 */
   tc.save();tc.scale(-1,1);tc.translate(-tmp.width,0);
   tc.drawImage(video,0,0,tmp.width,tmp.height);
   tc.restore();
-  /* 드로잉 오버레이 */
-  tc.save();tc.scale(-1,1);tc.translate(-tmp.width,0);
-  tc.globalAlpha=ovOpacity;
-  tc.drawImage(canvas,0,0,tmp.width,tmp.height);
-  tc.restore();
+  tc.drawImage(camCanvas,0,0);
   var a=document.createElement('a');
   a.href=tmp.toDataURL('image/png');
-  a.download='sweat_'+Date.now()+'.png';
+  a.download='sweat_tattoo_'+Date.now()+'.png';
   a.click();
 }
 window.saveShot=saveShot;
+
+function openCam(){
+  camWrap.classList.add('show');
+  startCam();
+}
+window.openCam=openCam;
+
+
 
 resize();
 window.addEventListener('resize',function(){resize();if(stream)resizeCamCanvas();});
 if(window.ResizeObserver)new ResizeObserver(function(){resize();if(stream)resizeCamCanvas();}).observe(cw);
 })();
+
+/* ══════════════════════════════
+   땀의 월드 — 자유 캔버스
+══════════════════════════════ */
+(function(){
+  var STORAGE_KEY='sweat_world_v3';
+  var bubble=null, bubbleTimer=null;
+
+  function getWorks(){
+    try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');}catch(e){return [];}
+  }
+  function saveWorks(w){
+    try{localStorage.setItem(STORAGE_KEY,JSON.stringify(w));}
+    catch(e){alert('저장 공간이 부족해요.');}
+  }
+
+  /* 월드 열기 */
+  window.openWorld=function(){
+    document.getElementById('world-modal').style.display='flex';
+    pz={x:0,y:0,scale:1};
+    applyTransform();
+    renderWorld();
+  };
+  window.closeWorld=function(){
+    document.getElementById('world-modal').style.display='none';
+    hideBubble();
+  };
+
+  /* 내보내기 버튼 */
+  window.openExport=function(){
+    var mainC=document.getElementById('c');
+    var upC=document.getElementById('up-canvas');
+    upC.width=mainC.width; upC.height=mainC.height;
+    var uc=upC.getContext('2d');
+    uc.fillStyle='#000'; uc.fillRect(0,0,upC.width,upC.height);
+    uc.drawImage(mainC,0,0);
+    document.getElementById('name-input').value='';
+    document.getElementById('desc-input').value='';
+    document.getElementById('upload-modal').style.display='flex';
+    setTimeout(function(){document.getElementById('name-input').focus();},150);
+  };
+  window.closeExport=function(){
+    document.getElementById('upload-modal').style.display='none';
+  };
+
+  /* 작품 저장 */
+  /* 1단계: 이름 입력 후 위치 선택 모드로 전환 */
+  var pendingImage=null;
+  var pendingName=null;
+  var pendingDesc=null;
+  var placingEl=null;
+
+  window.submitWork=function(){
+    var name=document.getElementById('name-input').value.trim();
+    if(!name){document.getElementById('name-input').focus();return;}
+    var desc=document.getElementById('desc-input').value.trim();
+    var upC=document.getElementById('up-canvas');
+    var tmp=document.createElement('canvas');
+    /* 원본 해상도 그대로 유지 (축소 없음) */
+    tmp.width=upC.width;
+    tmp.height=upC.height;
+    var tc=tmp.getContext('2d');
+    tc.fillStyle='#000'; tc.fillRect(0,0,tmp.width,tmp.height);
+    tc.drawImage(upC,0,0,tmp.width,tmp.height);
+    pendingImage=tmp.toDataURL('image/png');
+    pendingName=name;
+    pendingDesc=desc;
+    /* 이름 모달 닫고 월드 열어서 위치 선택 모드 진입 */
+    document.getElementById('upload-modal').style.display='none';
+    document.getElementById('world-modal').style.display='flex';
+    renderWorld();
+    startPlacing();
+  };
+
+  /* 2단계: 위치 선택 모드 */
+  function startPlacing(){
+    var world=document.getElementById('wm-world');
+    var items=document.getElementById('wm-items');
+
+    /* 안내 오버레이 */
+    var guide=document.createElement('div');
+    guide.id='place-guide';
+    guide.style.cssText='position:absolute;inset:0;z-index:50;cursor:crosshair;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center;padding-bottom:28px;';
+    guide.innerHTML='<div style="background:rgba(0,0,0,.85);border:0.5px solid #333;border-radius:24px;padding:10px 20px;font-family:-apple-system,sans-serif;font-size:13px;color:#ccc;">놓고 싶은 곳을 탭해서 위치를 정해주세요</div>';
+
+    /* 미리보기 이미지 — 손가락 따라다님 */
+    var preview=document.createElement('img');
+    preview.src=pendingImage;
+    preview.style.cssText='position:absolute;width:22%;border-radius:6px;opacity:.7;pointer-events:none;display:none;transform:translate(-50%,-50%);z-index:51;box-shadow:0 0 0 2px #0a84ff88;';
+    guide.appendChild(preview);
+    world.appendChild(guide);
+
+    /* 마우스/터치 이동 — 미리보기 따라오기 */
+    function onMove(e){
+      var r=world.getBoundingClientRect();
+      var cx=e.touches?e.touches[0].clientX:e.clientX;
+      var cy=e.touches?e.touches[0].clientY:e.clientY;
+      var px=cx-r.left, py=cy-r.top;
+      preview.style.left=px+'px';
+      preview.style.top=py+'px';
+      preview.style.display='block';
+    }
+    guide.addEventListener('mousemove',onMove);
+    guide.addEventListener('touchmove',function(e){e.preventDefault();onMove(e);},{passive:false});
+
+    /* 탭 — 위치 확정 */
+    function onTap(e){
+      e.preventDefault();
+      var r=world.getBoundingClientRect();
+      var cx=e.touches?e.changedTouches[0].clientX:e.clientX;
+      var cy=e.touches?e.changedTouches[0].clientY:e.clientY;
+      var px=cx-r.left, py=cy-r.top;
+      var xPct=parseFloat(((px/r.width)*100).toFixed(2));
+      var yPct=parseFloat(((py/r.height)*100).toFixed(2));
+      /* 가장자리 보정 */
+      xPct=Math.max(2,Math.min(xPct,78));
+      yPct=Math.max(2,Math.min(yPct,80));
+      confirmPlace(xPct,yPct);
+      guide.removeEventListener('click',onTap);
+      guide.removeEventListener('touchend',onTap);
+    }
+    guide.addEventListener('click',onTap);
+    guide.addEventListener('touchend',onTap,{passive:false});
+  }
+
+  /* 브러쉬별 대표 색상 (RGB 중심값) */
+  var BRUSH_COLORS={
+    '01':{r:206,g:147,b:216}, /* #CE93D8 라일락 */
+    '02':{r:175,g:190,b:197}, /* #AFBEC5 청회색 */
+    '03':{r:79, g:195,b:247}, /* #4FC3F7 하늘 */
+    '04':{r:255,g:138,b:101}, /* #FF8A65 주황 */
+    '05':{r:248,g:88, b:64},  /* #F85840 빨강 */
+    '06':{r:246,g:240,b:188}, /* #F6F0BC 아이보리 */
+    '07':{r:176,g:197,b:255}, /* #B0C5FF 연보라 */
+    '08':{r:255,g:212,b:69},  /* #FFD445 노랑 */
+    '09':{r:244,g:143,b:177}, /* #F48FB1 핑크 */
+    '10':{r:10, g:103,b:222}, /* #0A67DE 파랑 */
+    '11':{r:247,g:248,b:242}, /* #F7F8F2 흰색 */
+    '12':{r:203,g:195,b:8}    /* #CBC308 올리브 */
+  };
+
+  /* 이미지 URL에서 픽셀 색상 샘플링 → 브러쉬 비율 추정 */
+  function analyzeBrushRatio(imageUrl, callback){
+    var img=new Image();
+    img.crossOrigin='anonymous';
+    img.onload=function(){
+      var tmp=document.createElement('canvas');
+      var scale=Math.min(80/img.width,1);
+      tmp.width=Math.round(img.width*scale);
+      tmp.height=Math.round(img.height*scale);
+      var tc=tmp.getContext('2d');
+      tc.drawImage(img,0,0,tmp.width,tmp.height);
+      var data=tc.getImageData(0,0,tmp.width,tmp.height).data;
+      var scores={};
+      Object.keys(BRUSH_COLORS).forEach(function(k){scores[k]=0;});
+      var total=0;
+      for(var i=0;i<data.length;i+=4){
+        var r=data[i],g=data[i+1],b=data[i+2],a=data[i+3];
+        /* 배경(검정) 제외 */
+        if(a<30||( r<18&&g<18&&b<18)) continue;
+        total++;
+        /* 각 브러쉬 색과 거리 계산 */
+        var best=null, bestD=999999;
+        Object.keys(BRUSH_COLORS).forEach(function(k){
+          var c=BRUSH_COLORS[k];
+          var d=(r-c.r)*(r-c.r)+(g-c.g)*(g-c.g)+(b-c.b)*(b-c.b);
+          if(d<bestD){bestD=d;best=k;}
+        });
+        if(best&&bestD<25000) scores[best]++;
+      }
+      /* 비율 계산 — 0.5% 이상만 포함 */
+      var ratio={};
+      if(total>0){
+        Object.keys(scores).forEach(function(k){
+          var pct=Math.round(scores[k]/total*100);
+          if(pct>=1) ratio[k]=pct;
+        });
+      }
+      callback(ratio);
+    };
+    img.onerror=function(){callback({});};
+    img.src=imageUrl;
+  }
+
+  function confirmPlace(xPct,yPct){
+    var g=document.getElementById('place-guide');
+    if(g)g.parentNode.removeChild(g);
+
+    /* 색상 분석 후 저장 */
+    analyzeBrushRatio(pendingImage, function(ratio){
+      var works=getWorks();
+      works.push({
+        name:pendingName,
+        desc:pendingDesc||'',
+        image:pendingImage,
+        timestamp:Date.now(),
+        brushNum:String((window._getCurrentBrush?window._getCurrentBrush():0)+1).padStart(2,'0'),
+        brushRatio:ratio,
+        x:xPct, y:yPct, w:20
+      });
+      if(works.length>80)works=works.slice(-80);
+      saveWorks(works);
+      pendingImage=null; pendingName=null; pendingDesc=null;
+      renderWorld();
+    });
+  };
+
+  /* 자유 캔버스 렌더링 */
+  /* 브러쉬 메타 데이터 */
+  var BRUSH_META={
+    '01':{name:'지하철·버스', tags:['찝찝함','불쾌함','밀폐'], trait:'경계 없이 번지는 수채화 질감'},
+    '02':{name:'헬스장·운동기구', tags:['소금기','건조함','결정'], trait:'각진 소금 결정이 촘촘하게 박힘'},
+    '03':{name:'옷 땀자국', tags:['창피함','수축','시각적'], trait:'띄엄띄엄 맺히는 스테인 얼룩'},
+    '04':{name:'식사 시간', tags:['기름짐','노폐물','번들'], trait:'윤기 있는 기름진 글레이즈'},
+    '05':{name:'축구·운동 모임', tags:['연대감','확산','열기'], trait:'멀리까지 퍼지는 에어브러쉬 입자'},
+    '06':{name:'운동·무대', tags:['성취감','생명력','발광'], trait:'퍼지는 동그라미 입자들'},
+    '07':{name:'데오드란트·쿨링티슈', tags:['소거','쿨링','격자'], trait:'화장솜 엠보싱 눌림 무늬'},
+    '08':{name:'밀폐공간·강의실', tags:['열기축적','건조','가루'], trait:'chalky한 분필 가루 질감'},
+    '09':{name:'호감·처음 만남', tags:['긴장','설렘','떨림'], trait:'가늘게 떨리는 연필 해칭 선'},
+    '10':{name:'수영장·물 공간', tags:['청량함','유동','해소'], trait:'동심원으로 퍼지는 물 파문'},
+    '11':{name:'사회적 시선·낙인', tags:['시선','판단','긁힘'], trait:'흰 베이스 위 비비드 스크래치'},
+    '12':{name:'화장 무너짐·번들거림', tags:['번들','관리','광택'], trait:'기름 얼룩 위 흰 광점 산포'}
+  };
+
+  function renderWorld(){
+    var container=document.getElementById('wm-items');
+    var hint=document.getElementById('wm-hint');
+    var countEl=document.getElementById('wm-count');
+    container.innerHTML='';
+    hidePanel();
+    var works=getWorks();
+    countEl.textContent=works.length ? works.length+'개의 문양' : '';
+    hint.style.display=works.length?'none':'block';
+
+    works.forEach(function(w,i){
+      var el=document.createElement('div');
+      el.style.cssText=[
+        'position:absolute',
+        'left:'+w.x+'%',
+        'top:'+w.y+'%',
+        'width:'+(w.w||18)+'%',
+        'cursor:pointer',
+        'transition:transform .12s',
+        'z-index:'+(10+i)
+      ].join(';');
+
+      var img=document.createElement('img');
+      img.src=w.image;
+      img.style.cssText='display:block;width:100%;border-radius:6px;image-rendering:high-quality;';
+      el.appendChild(img);
+      container.appendChild(el);
+
+      function showPanel(e){
+        e.stopPropagation();
+        var rect=el.getBoundingClientRect();
+        var worldRect=document.getElementById('wm-world').getBoundingClientRect();
+      var bx=(rect.left-worldRect.left-pz.x)/pz.scale;
+      var by=(rect.top-worldRect.top-pz.y)/pz.scale;
+      var rw=rect.width/pz.scale;
+      var rh=rect.height/pz.scale;
+      openDetailPanel(w, rect.left-worldRect.left, rect.top-worldRect.top, rect.width, rect.height);
+      }
+      el.addEventListener('click',showPanel);
+      el.addEventListener('touchend',function(e){e.preventDefault();showPanel(e);},{passive:false});
+    });
+
+    document.getElementById('wm-world').onclick=function(e){
+      if(e.target===document.getElementById('wm-world')||e.target===container) hidePanel();
+    };
+
+    /* ── pan / zoom ── */
+    initPanZoom();
+  }
+
+  var _pzInited=false;
+  var pz={x:0,y:0,scale:1};
+
+  function applyTransform(){
+    var items=document.getElementById('wm-items');
+    if(items) items.style.transform='translate('+pz.x+'px,'+pz.y+'px) scale('+pz.scale+')';
+  }
+
+  function clampPZ(){
+    var world=document.getElementById('wm-world');
+    if(!world) return;
+    var ww=world.offsetWidth, wh=world.offsetHeight;
+    var minX=ww*(1-pz.scale), minY=wh*(1-pz.scale);
+    pz.x=Math.min(0,Math.max(pz.x, minX));
+    pz.y=Math.min(0,Math.max(pz.y, minY));
+  }
+
+  function initPanZoom(){
+    if(_pzInited) return;
+    _pzInited=true;
+    var world=document.getElementById('wm-world');
+
+    /* 마우스 휠 — 줌 */
+    world.addEventListener('wheel',function(e){
+      e.preventDefault();
+      var rect=world.getBoundingClientRect();
+      var mx=e.clientX-rect.left, my=e.clientY-rect.top;
+      var delta=e.deltaY>0?0.9:1.1;
+      var newScale=Math.min(4, Math.max(0.5, pz.scale*delta));
+      var ratio=newScale/pz.scale;
+      pz.x=mx-(mx-pz.x)*ratio;
+      pz.y=my-(my-pz.y)*ratio;
+      pz.scale=newScale;
+      clampPZ(); applyTransform();
+    },{passive:false});
+
+    /* 터치 — 핀치 줌 + 팬 */
+    var lastTouches=null;
+    world.addEventListener('touchstart',function(e){
+      if(e.touches.length>=2){
+        lastTouches=Array.from(e.touches).map(function(t){return{x:t.clientX,y:t.clientY};});
+      } else if(e.touches.length===1){
+        lastTouches=[{x:e.touches[0].clientX,y:e.touches[0].clientY}];
+      }
+    },{passive:true});
+
+    world.addEventListener('touchmove',function(e){
+      e.preventDefault();
+      if(e.touches.length===2 && lastTouches && lastTouches.length===2){
+        var t0={x:e.touches[0].clientX,y:e.touches[0].clientY};
+        var t1={x:e.touches[1].clientX,y:e.touches[1].clientY};
+        var rect=world.getBoundingClientRect();
+
+        /* 현재/이전 두 손가락 거리 */
+        var prevDist=Math.hypot(lastTouches[1].x-lastTouches[0].x, lastTouches[1].y-lastTouches[0].y);
+        var currDist=Math.hypot(t1.x-t0.x, t1.y-t0.y);
+        var scaleD=prevDist>0?currDist/prevDist:1;
+
+        /* 두 손가락 중심 */
+        var cx=(t0.x+t1.x)/2-rect.left;
+        var cy=(t0.y+t1.y)/2-rect.top;
+        var pcx=(lastTouches[0].x+lastTouches[1].x)/2-rect.left;
+        var pcy=(lastTouches[0].y+lastTouches[1].y)/2-rect.top;
+
+        var newScale=Math.min(4,Math.max(0.5,pz.scale*scaleD));
+        var ratio=newScale/pz.scale;
+        pz.x=cx-(pcx-pz.x)*ratio+(cx-pcx);
+        pz.y=cy-(pcy-pz.y)*ratio+(cy-pcy);
+        pz.scale=newScale;
+        lastTouches=[t0,t1];
+        clampPZ(); applyTransform();
+
+      } else if(e.touches.length===1 && lastTouches && lastTouches.length===1){
+        var dx=e.touches[0].clientX-lastTouches[0].x;
+        var dy=e.touches[0].clientY-lastTouches[0].y;
+        pz.x+=dx; pz.y+=dy;
+        lastTouches=[{x:e.touches[0].clientX,y:e.touches[0].clientY}];
+        clampPZ(); applyTransform();
+      }
+    },{passive:false});
+
+    world.addEventListener('touchend',function(e){
+      if(e.touches.length===0) lastTouches=null;
+      else lastTouches=Array.from(e.touches).map(function(t){return{x:t.clientX,y:t.clientY};});
+    },{passive:true});
+
+    /* 마우스 드래그 팬 */
+    var dragging=false, dragStart={x:0,y:0};
+    world.addEventListener('mousedown',function(e){
+      if(e.target.closest && e.target.closest('#detail-panel')) return;
+      dragging=true; dragStart={x:e.clientX-pz.x,y:e.clientY-pz.y};
+      world.style.cursor='grabbing';
+    });
+    window.addEventListener('mousemove',function(e){
+      if(!dragging) return;
+      pz.x=e.clientX-dragStart.x;
+      pz.y=e.clientY-dragStart.y;
+      clampPZ(); applyTransform();
+    });
+    window.addEventListener('mouseup',function(){
+      dragging=false;
+      var w=document.getElementById('wm-world');
+      if(w) w.style.cursor='default';
+    });
+  }
+
+  function buildBarsHtml(ratio){
+    if(!ratio||!Object.keys(ratio).length) return '';
+    var sorted=Object.keys(ratio).sort(function(a,b){return ratio[b]-ratio[a];}).slice(0,4);
+    var bars=sorted.map(function(k){
+      var m=BRUSH_META[k]||{name:'브러쉬 '+k};
+      var pct=ratio[k];
+      var c=BRUSH_COLORS[k]||{r:120,g:120,b:120};
+      return '<div style="margin-bottom:6px;">'+
+        '<div style="display:flex;justify-content:space-between;margin-bottom:2px;">'+
+          '<span style="font-size:11px;color:#777;font-family:-apple-system,sans-serif;">'+m.name+'</span>'+
+          '<span style="font-size:11px;color:#555;font-family:-apple-system,sans-serif;">'+pct+'%</span>'+
+        '</div>'+
+        '<div style="background:#1a1a1a;border-radius:3px;height:4px;overflow:hidden;">'+
+          '<div style="height:4px;border-radius:3px;width:'+Math.min(pct,100)+'%;background:rgb('+c.r+','+c.g+','+c.b+');"></div>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+    return '<p style="font-size:11px;color:#555;font-family:-apple-system,sans-serif;margin:0 0 7px;letter-spacing:.04em;text-transform:uppercase;">브러쉬 구성</p>'+bars;
+  }
+
+  function openDetailPanel(w, bx, by, rw, rh){
+    hidePanel();
+    var world=document.getElementById('wm-world');
+    var ww=world.offsetWidth, wh=world.offsetHeight;
+
+    var brushNum=w.brushNum||'01';
+    var meta=BRUSH_META[brushNum]||{name:'알 수 없음',tags:[],trait:'독특한 텍스처'};
+
+    var panel=document.createElement('div');
+    panel.id='detail-panel';
+
+    var pw=205;
+    var px=bx+rw+10;
+    var py=by;
+    if(px+pw>ww-10) px=bx-pw-10;
+    if(px<6) px=6;
+    if(py+280>wh-10) py=wh-290;
+    if(py<6) py=6;
+
+    panel.style.cssText=[
+      'position:absolute','left:'+px+'px','top:'+py+'px','width:'+pw+'px',
+      'background:rgba(14,14,14,.97)','border:0.5px solid #2a2a2a',
+      'border-radius:14px','padding:14px','z-index:100',
+      'pointer-events:auto','animation:panelIn .18s ease'
+    ].join(';');
+
+    var ratio=w.brushRatio||{};
+    var barsHtml=buildBarsHtml(ratio);
+    var descHtml=w.desc?
+      '<p style="font-size:12px;color:#aaa;font-family:-apple-system,sans-serif;margin:0 0 10px;line-height:1.6;font-style:italic;">'+escP(w.desc)+'</p>':'';
+    var tagsHtml=meta.tags.map(function(t){
+      return '<span style="display:inline-block;background:#1e1e1e;border:0.5px solid #2a2a2a;border-radius:20px;font-size:11px;color:#888;padding:3px 9px;margin:2px 3px 2px 0;">'+t+'</span>';
+    }).join('');
+
+    panel.innerHTML=
+      '<div style="display:flex;align-items:center;gap:9px;margin-bottom:12px;">'+
+        '<div style="width:28px;height:28px;border-radius:50%;overflow:hidden;flex-shrink:0;border:0.5px solid #2a2a2a;">'+
+          '<img src="'+w.image+'" style="width:100%;height:100%;object-fit:cover;"/>'+
+        '</div>'+
+        '<p style="font-size:14px;font-weight:500;color:#fff;font-family:-apple-system,sans-serif;margin:0;line-height:1.3;">'+escP(w.name)+'</p>'+
+      '</div>'+
+      descHtml+
+      '<div id="ratio-section">'+barsHtml+'</div>'+
+      '<p style="font-size:11px;color:#555;font-family:-apple-system,sans-serif;margin:10px 0 4px;letter-spacing:.04em;text-transform:uppercase;">특징</p>'+
+      '<p style="font-size:12px;color:#888;font-family:-apple-system,sans-serif;margin:0 0 10px;line-height:1.55;">'+meta.trait+'</p>'+
+      '<div style="margin-bottom:10px;">'+tagsHtml+'</div>'+
+      '<p style="font-size:10px;color:#333;font-family:-apple-system,sans-serif;margin:0;">'+new Date(w.timestamp).toLocaleDateString('ko-KR')+'</p>';
+
+    var closeBtn=document.createElement('button');
+    closeBtn.textContent='×';
+    closeBtn.style.cssText='position:absolute;top:8px;right:10px;background:transparent;border:none;color:#444;font-size:16px;cursor:pointer;line-height:1;padding:0;';
+    closeBtn.onclick=function(e){e.stopPropagation();hidePanel();};
+    panel.appendChild(closeBtn);
+    world.appendChild(panel);
+
+    /* 기존 작품 실시간 분석 */
+    if(!w.brushRatio||!Object.keys(w.brushRatio).length){
+      analyzeBrushRatio(w.image,function(r){
+        var sec=document.getElementById('ratio-section');
+        if(sec) sec.innerHTML=buildBarsHtml(r);
+      });
+    }
+  }
+
+
+
+    function hidePanel(){
+    var p=document.getElementById('detail-panel');
+    if(p) p.parentNode.removeChild(p);
+  }
+
+  function escP(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+
+  function hideBubble(){hidePanel();}
+
+  /* Enter 키 */
+  document.addEventListener('DOMContentLoaded',function(){
+    var ni=document.getElementById('name-input');
+    if(ni) ni.addEventListener('keydown',function(e){if(e.key==='Enter')window.submitWork();});
+  });
+
+})();
 </script>
+
+<!-- 월드 갤러리 모달 (자유 캔버스) -->
+<div id="world-modal" style="position:fixed;inset:0;z-index:200;background:#000;display:none;flex-direction:column;overflow:hidden;">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:rgba(0,0,0,.9);border-bottom:0.5px solid #1a1a1a;flex-shrink:0;position:relative;z-index:10;">
+    <span style="font-size:14px;font-weight:500;color:#fff;font-family:-apple-system,sans-serif;">✦ 땀의 월드</span>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span id="wm-count" style="font-size:11px;color:#444;font-family:-apple-system,sans-serif;"></span>
+      <button onclick="closeWorld()" style="background:transparent;border:0.5px solid #2a2a2a;border-radius:8px;color:#666;font-size:12px;font-family:-apple-system,sans-serif;padding:6px 12px;cursor:pointer;">닫기</button>
+    </div>
+  </div>
+  <div id="wm-world" style="flex:1;position:relative;overflow:hidden;touch-action:none;">
+    <div id="wm-items" style="position:absolute;top:0;left:0;width:100%;height:100%;transform-origin:0 0;will-change:transform;"></div>
+    <div id="wm-bubble" style="position:absolute;display:none;z-index:30;pointer-events:none;transition:opacity .2s;">
+      <div style="background:rgba(18,18,18,.96);border:0.5px solid #2a2a2a;border-radius:14px 14px 14px 3px;padding:9px 13px;">
+        <p id="wm-bubble-text" style="font-size:13px;color:#eee;margin:0;font-family:-apple-system,sans-serif;line-height:1.5;white-space:pre;"></p>
+      </div>
+    </div>
+    <div id="wm-hint" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;">
+      <p style="font-size:15px;color:#2a2a2a;font-family:-apple-system,sans-serif;margin:0 0 6px;">아직 아무 문양도 없어요</p>
+      <p style="font-size:12px;color:#1e1e1e;font-family:-apple-system,sans-serif;margin:0;">내보내기 버튼으로 첫 문양을 올려보세요</p>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<!-- ── 내보내기(이름 입력) 모달 ── -->
+<div id="upload-modal" style="position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;">
+  <div style="background:#111;border:0.5px solid #2a2a2a;border-radius:16px;padding:24px;width:min(360px,90vw);">
+    <p style="font-size:16px;font-weight:500;color:#fff;font-family:-apple-system,sans-serif;margin:0 0 14px;">땀 문양 이름 짓기</p>
+    <div style="width:100%;aspect-ratio:3/2;border-radius:8px;overflow:hidden;margin-bottom:14px;background:#000;">
+      <canvas id="up-canvas" style="width:100%;height:100%;display:block;"></canvas>
+    </div>
+    <input id="name-input" type="text" placeholder="문양 이름을 지어주세요" maxlength="30"
+      style="width:100%;background:#1a1a1a;border:0.5px solid #2a2a2a;border-radius:8px;color:#fff;font-size:14px;font-family:-apple-system,sans-serif;padding:10px 12px;outline:none;margin-bottom:10px;box-sizing:border-box;"/>
+    <textarea id="desc-input" placeholder="이 땀 문양에 담긴 경험을 들려주세요." maxlength="120"
+      style="width:100%;background:#1a1a1a;border:0.5px solid #2a2a2a;border-radius:8px;color:#fff;font-size:13px;font-family:-apple-system,sans-serif;padding:10px 12px;outline:none;margin-bottom:14px;box-sizing:border-box;resize:none;height:72px;line-height:1.55;"></textarea>
+    <div style="display:flex;gap:8px;">
+      <button onclick="closeExport()" style="flex:1;background:transparent;border:0.5px solid #2a2a2a;border-radius:8px;color:#888;font-size:13px;font-family:-apple-system,sans-serif;padding:10px;cursor:pointer;">취소</button>
+      <button onclick="submitWork()" style="flex:1;background:#0a84ff;border:0.5px solid #0a84ff;border-radius:8px;color:#fff;font-size:13px;font-family:-apple-system,sans-serif;padding:10px;cursor:pointer;">월드에 올리기 ✦</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
