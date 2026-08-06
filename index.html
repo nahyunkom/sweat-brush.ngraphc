@@ -755,109 +755,117 @@ function setCamMode(mode){
 }
 window.setCamMode=setCamMode;
 
-/* ── 유리닦기 렌더 ── */
+/* ── 유리닦기 ── */
 function renderGlass(landmarks,cw,ch){
-  if(!glassCanvas||glassCanvas.width!==cw){
+  if(!glassCanvas||glassCanvas.width!==cw||glassCanvas.height!==ch){
     glassCanvas=document.createElement('canvas');
     glassCanvas.width=cw; glassCanvas.height=ch;
   }
   var gc=glassCanvas.getContext('2d');
 
-  /* 손 중심 */
-  var palm=landmarks[9];
-  var hx=(1-palm.x)*cw, hy=palm.y*ch;
-  var handSize=Math.hypot(
-    (1-landmarks[5].x)*cw-(1-landmarks[17].x)*cw,
-    landmarks[5].y*ch-landmarks[17].y*ch
-  )*1.2;
-
-  /* 닦인 영역 추가 — 손 실루엣으로 */
+  /* 닦인 영역 누적 */
   gc.save();
   drawHandMask(gc,landmarks,cw,ch);
   gc.fillStyle='rgba(255,255,255,1)';
   gc.fill();
   gc.restore();
 
-  /* 배경: 뿌연 패턴 전체 */
+  /* 1. 전체에 흐린 안개 레이어 */
   camCtx.save();
-  camCtx.globalAlpha=0.9;
-  /* 패턴을 흐리게 전체에 깔기 */
-  camCtx.filter='blur(12px) brightness(0.7)';
-  camCtx.drawImage(canvas,0,0,cw,ch);
-  camCtx.filter='none';
+  camCtx.fillStyle='rgba(30,30,40,0.82)';
+  camCtx.fillRect(0,0,cw,ch);
   camCtx.restore();
 
-  /* 닦인 부분에만 선명한 패턴 노출 */
-  camCtx.save();
-  /* glassCanvas의 흰 부분만 클리핑 */
-  camCtx.globalCompositeOperation='destination-out';
-  camCtx.globalAlpha=1;
-  /* 먼저 닦인 영역을 destination-out으로 파기 */
-  camCtx.drawImage(glassCanvas,0,0);
-  camCtx.restore();
+  /* 2. 닦인 영역 = 웹캠이 보이는 창문 */
+  var tmp=document.createElement('canvas');
+  tmp.width=cw; tmp.height=ch;
+  var tc=tmp.getContext('2d');
+  /* 닦인 마스크 */
+  tc.drawImage(glassCanvas,0,0);
+  tc.globalCompositeOperation='source-in';
+  /* 웹캠 그대로 */
+  tc.save();
+  tc.scale(-1,1); tc.translate(-cw,0);
+  tc.drawImage(video,0,0,cw,ch);
+  tc.restore();
+  camCtx.drawImage(tmp,0,0);
 
-  /* 닦인 자리에 선명 패턴 삽입 */
-  camCtx.save();
-  var tmpC=document.createElement('canvas');
-  tmpC.width=cw; tmpC.height=ch;
-  var tmpCtx=tmpC.getContext('2d');
-  /* 닦인 영역 마스크 클립 */
-  tmpCtx.drawImage(glassCanvas,0,0);
-  tmpCtx.globalCompositeOperation='source-in';
-  tmpCtx.drawImage(canvas,0,0,cw,ch);
-  camCtx.globalAlpha=0.88;
-  camCtx.drawImage(tmpC,0,0);
-  camCtx.restore();
+  /* 3. 닦인 영역에 패턴 살짝 오버레이 */
+  var tmp2=document.createElement('canvas');
+  tmp2.width=cw; tmp2.height=ch;
+  var tc2=tmp2.getContext('2d');
+  tc2.drawImage(glassCanvas,0,0);
+  tc2.globalCompositeOperation='source-in';
+  tc2.globalAlpha=0.45;
+  tc2.drawImage(canvas,0,0,cw,ch);
+  camCtx.drawImage(tmp2,0,0);
 
-  /* 테두리 물기 효과 */
+  /* 4. 닦는 손 테두리 */
   camCtx.save();
   drawHandMask(camCtx,landmarks,cw,ch);
-  camCtx.strokeStyle='rgba(200,220,255,0.5)';
+  camCtx.strokeStyle='rgba(180,220,255,0.6)';
   camCtx.lineWidth=3;
+  camCtx.stroke();
+  camCtx.restore();
+
+  /* 5. 안개 가장자리 물기 */
+  camCtx.save();
+  drawHandMask(camCtx,landmarks,cw,ch);
+  camCtx.shadowColor='rgba(180,220,255,0.8)';
+  camCtx.shadowBlur=18;
+  camCtx.strokeStyle='rgba(180,220,255,0.3)';
+  camCtx.lineWidth=8;
   camCtx.stroke();
   camCtx.restore();
 }
 
-/* ── 손자국 렌더 ── */
+/* ── 손자국 ── */
 function renderStamp(landmarks,cw,ch){
-  /* 손이 새로 등장하면 스탬프 추가 */
   var palm=landmarks[9];
   var hx=(1-palm.x)*cw, hy=palm.y*ch;
-  var moved=!prevHandPos||Math.hypot(hx-prevHandPos.x,hy-prevHandPos.y)>40;
 
-  if(moved&&Math.random()<0.15){
-    /* 손 랜드마크 스냅샷 저장 */
+  /* 손이 충분히 움직이면 새 스탬프 */
+  var dist=prevHandPos?Math.hypot(hx-prevHandPos.x,hy-prevHandPos.y):999;
+  if(dist>30){
     stamps.push({
-      landmarks:landmarks.map(function(l){return{x:l.x,y:l.y,z:l.z};}),
-      alpha:0.75,
-      time:Date.now()
+      lm:landmarks.map(function(l){return{x:l.x,y:l.y,z:l.z};}),
+      born:Date.now()
     });
-    if(stamps.length>12) stamps.shift();
+    if(stamps.length>20) stamps.shift();
+    prevHandPos={x:hx,y:hy};
   }
-  prevHandPos={x:hx,y:hy};
 
-  /* 쌓인 손자국 그리기 */
+  /* 쌓인 손자국 */
+  var now=Date.now();
   stamps.forEach(function(s){
-    var age=(Date.now()-s.time)/3000;
-    var a=s.alpha*(1-age*0.3);
-    if(a<0.05) return;
+    var age=(now-s.born)/5000; /* 5초 동안 유지 */
+    if(age>1) return;
+    var a=0.7*(1-age);
+
+    /* 패턴을 손 마스크로 클립 */
     camCtx.save();
-    drawHandMaskFromSnapshot(camCtx,s.landmarks,cw,ch);
+    drawHandMaskFromSnapshot(camCtx,s.lm,cw,ch);
     camCtx.clip();
     camCtx.globalAlpha=a;
     camCtx.drawImage(canvas,0,0,cw,ch);
     camCtx.restore();
-    /* 윤곽 */
+
+    /* 윤곽선 */
     camCtx.save();
-    drawHandMaskFromSnapshot(camCtx,s.landmarks,cw,ch);
-    camCtx.strokeStyle='rgba(255,255,255,'+(a*0.4)+')';
-    camCtx.lineWidth=1.5;
+    drawHandMaskFromSnapshot(camCtx,s.lm,cw,ch);
+    camCtx.strokeStyle='rgba(255,255,255,'+(a*0.5)+')';
+    camCtx.lineWidth=2;
     camCtx.stroke();
     camCtx.restore();
   });
 
-  /* 현재 손 */
-  warpPatternToHand(camCtx,landmarks,cw,ch);
+  /* 현재 손 — 타투 */
+  camCtx.save();
+  drawHandMask(camCtx,landmarks,cw,ch);
+  camCtx.clip();
+  camCtx.globalAlpha=0.85;
+  camCtx.drawImage(canvas,0,0,cw,ch);
+  camCtx.restore();
 }
 
 function drawHandMaskFromSnapshot(ctx,lm,cw,ch){
@@ -870,87 +878,106 @@ function drawHandMaskFromSnapshot(ctx,lm,cw,ch){
   ctx.closePath();
 }
 
-/* ── 물방울 렌더 ── */
+/* ── 물방울 ── */
 function renderDrop(landmarks,cw,ch){
-  var palm=landmarks[9];
-  var hx=(1-palm.x)*cw, hy=palm.y*ch;
-  var handSize=Math.hypot(
-    (1-landmarks[5].x)*cw-(1-landmarks[17].x)*cw,
-    landmarks[5].y*ch-landmarks[17].y*ch
-  );
-
-  /* 손가락 끝에서 물방울 생성 */
   var tips=[4,8,12,16,20];
-  tips.forEach(function(i){
-    if(Math.random()<0.18){
-      var tx=(1-landmarks[i].x)*cw;
-      var ty=landmarks[i].y*ch;
-      /* 패턴에서 색상 샘플 */
-      var px=Math.floor(landmarks[i].x*canvas.width);
-      var py=Math.floor(landmarks[i].y*canvas.height);
-      var imgData=canvas.getContext('2d').getImageData(Math.max(0,px),Math.max(0,py),1,1).data;
-      var col=imgData[3]>10?
-        'rgba('+imgData[0]+','+imgData[1]+','+imgData[2]+',':
-        'rgba(200,180,255,';
-      drops.push({
-        x:tx, y:ty,
-        vx:(Math.random()-0.5)*1.5,
-        vy:1+Math.random()*2,
-        r:3+Math.random()*handSize*0.06,
-        col:col,
-        alpha:0.85,
-        trail:[]
-      });
+  tips.forEach(function(ti){
+    if(Math.random()<0.35){
+      var tx=(1-landmarks[ti].x)*cw;
+      var ty=landmarks[ti].y*ch;
+      var px=Math.min(canvas.width-1,Math.floor(landmarks[ti].x*canvas.width));
+      var py=Math.min(canvas.height-1,Math.floor(landmarks[ti].y*canvas.height));
+      var id=canvas.getContext('2d').getImageData(px,py,1,1).data;
+      var col=id[3]>20?'rgba('+id[0]+','+id[1]+','+id[2]+',':'rgba(200,160,255,';
+      /* 여러 방울 한 번에 */
+      var n=Math.floor(1+Math.random()*3);
+      for(var k=0;k<n;k++){
+        drops.push({
+          x:tx+rnd(-8,8),
+          y:ty+rnd(-4,4),
+          vx:rnd(-0.8,0.8),
+          vy:2+Math.random()*4,
+          r:5+Math.random()*9,
+          col:col,
+          alpha:0.92,
+          trail:[],
+          stretch:1+Math.random()*0.8 /* 세로로 늘어나는 정도 */
+        });
+      }
     }
   });
 
-  /* 물방울 업데이트 */
-  drops=drops.filter(function(d){return d.alpha>0.05&&d.y<ch+50;});
+  drops=drops.filter(function(d){return d.alpha>0.03&&d.y<ch+80;});
+
   drops.forEach(function(d){
     d.trail.push({x:d.x,y:d.y});
-    if(d.trail.length>18) d.trail.shift();
+    if(d.trail.length>40) d.trail.shift(); /* 꼬리 더 길게 */
     d.x+=d.vx;
-    d.vy+=0.18; /* 중력 */
-    d.vx*=0.99;
+    d.vy+=0.35; /* 중력 강하게 */
+    d.vx*=0.98;
     d.y+=d.vy;
-    d.alpha-=0.004;
+    d.alpha-=0.006;
 
-    /* 흘림 자국 */
-    if(d.trail.length>2){
+    /* 꼬리 — 굵고 길게 */
+    if(d.trail.length>3){
       camCtx.save();
-      camCtx.beginPath();
-      camCtx.moveTo(d.trail[0].x,d.trail[0].y);
-      d.trail.forEach(function(p){camCtx.lineTo(p.x,p.y);});
-      camCtx.strokeStyle=d.col+(d.alpha*0.35)+')';
-      camCtx.lineWidth=d.r*0.9;
-      camCtx.lineCap='round';
-      camCtx.lineJoin='round';
-      camCtx.stroke();
+      var trailLen=d.trail.length;
+      for(var i=1;i<trailLen;i++){
+        var t=i/trailLen;
+        var tw=d.r*(0.25+t*0.55);
+        camCtx.beginPath();
+        camCtx.moveTo(d.trail[i-1].x,d.trail[i-1].y);
+        camCtx.lineTo(d.trail[i].x,d.trail[i].y);
+        camCtx.strokeStyle=d.col+(d.alpha*t*0.55)+')';
+        camCtx.lineWidth=tw*2;
+        camCtx.lineCap='round';
+        camCtx.stroke();
+      }
       camCtx.restore();
     }
 
-    /* 물방울 원 */
+    /* 물방울 본체 — 세로로 늘어난 타원 */
     camCtx.save();
-    var g=camCtx.createRadialGradient(d.x-d.r*0.3,d.y-d.r*0.3,0,d.x,d.y,d.r);
-    g.addColorStop(0,d.col+(d.alpha*0.9)+')');
-    g.addColorStop(0.6,d.col+(d.alpha*0.7)+')');
+    var speed=Math.min(d.vy/8,1);
+    var scaleY=1+speed*d.stretch;
+    camCtx.translate(d.x,d.y);
+    camCtx.scale(1,scaleY);
+    /* 그라데이션 */
+    var g=camCtx.createRadialGradient(-d.r*0.25,-d.r*0.25,0,0,0,d.r);
+    g.addColorStop(0,d.col+(d.alpha*0.95)+')');
+    g.addColorStop(0.5,d.col+(d.alpha*0.75)+')');
     g.addColorStop(1,d.col+(d.alpha*0.1)+')');
     camCtx.beginPath();
-    camCtx.arc(d.x,d.y,d.r,0,Math.PI*2);
+    camCtx.arc(0,0,d.r,0,Math.PI*2);
     camCtx.fillStyle=g;
     camCtx.fill();
     /* 하이라이트 */
     camCtx.beginPath();
-    camCtx.arc(d.x-d.r*0.3,d.y-d.r*0.3,d.r*0.3,0,Math.PI*2);
-    camCtx.fillStyle='rgba(255,255,255,'+(d.alpha*0.5)+')';
+    camCtx.arc(-d.r*0.28,-d.r*0.3,d.r*0.32,0,Math.PI*2);
+    camCtx.fillStyle='rgba(255,255,255,'+(d.alpha*0.6)+')';
     camCtx.fill();
     camCtx.restore();
+
+    /* 바닥 튀김 효과 */
+    if(d.y>ch-20&&d.alpha>0.3){
+      camCtx.save();
+      camCtx.beginPath();
+      camCtx.ellipse(d.x,ch-8,d.r*1.4,d.r*0.3,0,0,Math.PI*2);
+      camCtx.fillStyle=d.col+(d.alpha*0.25)+')';
+      camCtx.fill();
+      camCtx.restore();
+    }
   });
 
-  /* 현재 손 */
-  warpPatternToHand(camCtx,landmarks,cw,ch);
+  /* 현재 손 — 타투 */
+  camCtx.save();
+  drawHandMask(camCtx,landmarks,cw,ch);
+  camCtx.clip();camCtx.globalAlpha=0.75;
+  camCtx.drawImage(canvas,0,0,cw,ch);
+  camCtx.restore();
 }
 
+function rnd(a,b){return a+Math.random()*(b-a);}
 
 function drawHandMask(ctx,landmarks,cw,ch){
   var outline=[0,1,2,3,4,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5];
