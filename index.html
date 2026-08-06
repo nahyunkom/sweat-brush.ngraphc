@@ -694,11 +694,16 @@ function camLoop(){
 
   camCtx.clearRect(0,0,cw,ch);
 
-  /* 1. 웹캠 화면 (거울 반전) */
+  /* 1. 웹캠 화면 (거울 반전) — 비율 유지 */
   camCtx.save();
   camCtx.scale(-1,1);
   camCtx.translate(-cw,0);
-  camCtx.drawImage(video,0,0,cw,ch);
+  /* 비디오 실제 비율에 맞게 cover 방식으로 그리기 */
+  var vw=video.videoWidth||cw, vh=video.videoHeight||ch;
+  var scale=Math.max(cw/vw, ch/vh);
+  var dw=vw*scale, dh=vh*scale;
+  var dx=(cw-dw)/2, dy=(ch-dh)/2;
+  camCtx.drawImage(video,dx,dy,dw,dh);
   camCtx.restore();
 
   /* 2. 동그라미 안에 패턴 — 투명도 50% */
@@ -728,11 +733,107 @@ function drawHandMask(ctx,landmarks,cw,ch){
   ctx.beginPath();
   outline.forEach(function(i,idx){
     var l=landmarks[i];
-    var x=(1-l.x)*cw, y=l.y*ch; /* 좌우 반전 (거울 맞춤) */
+    var x=(1-l.x)*cw, y=l.y*ch;
     if(idx===0) ctx.moveTo(x,y);
     else ctx.lineTo(x,y);
   });
   ctx.closePath();
+}
+
+/* ── perspective warp — 4점 변환으로 패턴을 손 평면에 맞춤 ── */
+function warpPatternToHand(ctx,landmarks,cw,ch){
+  /* 손바닥 4 코너 랜드마크: 손목(0), 검지MCP(5), 새끼MCP(17), 중지끝(12) 기준 */
+  function lp(i){ return{x:(1-landmarks[i].x)*cw, y:landmarks[i].y*ch}; }
+
+  var wrist  = lp(0);
+  var idx    = lp(5);   /* 검지 MCP */
+  var pinky  = lp(17);  /* 새끼 MCP */
+  var mid    = lp(9);   /* 중지 MCP */
+
+  /* 손바닥 중심 */
+  var palmCx=(wrist.x+idx.x+pinky.x+mid.x)/4;
+  var palmCy=(wrist.y+idx.y+pinky.y+mid.y)/4;
+
+  /* 손바닥 너비/높이 */
+  var palmW=Math.hypot(idx.x-pinky.x, idx.y-pinky.y);
+  var palmH=Math.hypot(wrist.x-mid.x, wrist.y-mid.y)*1.3;
+
+  /* z값으로 기울기 추정 */
+  var zWrist=landmarks[0].z||0;
+  var zMid  =landmarks[9].z||0;
+  var zIdx  =landmarks[5].z||0;
+  var zPink =landmarks[17].z||0;
+
+  /* 손이 기울어진 정도 → perspective 오프셋 */
+  var tiltLR=(zIdx-zPink)*80;   /* 좌우 기울기 */
+  var tiltUD=(zWrist-zMid)*80;  /* 상하 기울기 */
+
+  /* 패턴 소스 좌표 (전체 캔버스) */
+  var sw=canvas.width, sh=canvas.height;
+
+  /* 목적지 4점 — perspective 왜곡 적용 */
+  var dst=[
+    {x:idx.x  +tiltLR*0.5, y:idx.y  -tiltUD*0.5},  /* 좌상 */
+    {x:pinky.x -tiltLR*0.5, y:pinky.y-tiltUD*0.5}, /* 우상 */
+    {x:wrist.x -tiltLR*0.5, y:wrist.y+tiltUD*0.5}, /* 우하 */
+    {x:wrist.x +tiltLR*0.5+palmW*0.1, y:wrist.y+tiltUD*0.5} /* 좌하 */
+  ];
+
+  /* 손 마스크 클리핑 */
+  ctx.save();
+  drawHandMask(ctx,landmarks,cw,ch);
+  ctx.clip();
+  ctx.globalAlpha=0.85;
+
+  /* 4분할 삼각형으로 패턴 warp */
+  var triangles=[
+    /* 좌상 삼각형 */
+    { src:[{x:0,y:0},{x:sw,y:0},{x:sw/2,y:sh/2}],
+      dst:[dst[0],dst[1],{x:(dst[0].x+dst[1].x+dst[2].x+dst[3].x)/4,y:(dst[0].y+dst[1].y+dst[2].y+dst[3].y)/4}]},
+    /* 우상 */
+    { src:[{x:sw,y:0},{x:sw,y:sh},{x:sw/2,y:sh/2}],
+      dst:[dst[1],dst[2],{x:(dst[0].x+dst[1].x+dst[2].x+dst[3].x)/4,y:(dst[0].y+dst[1].y+dst[2].y+dst[3].y)/4}]},
+    /* 우하 */
+    { src:[{x:sw,y:sh},{x:0,y:sh},{x:sw/2,y:sh/2}],
+      dst:[dst[2],dst[3],{x:(dst[0].x+dst[1].x+dst[2].x+dst[3].x)/4,y:(dst[0].y+dst[1].y+dst[2].y+dst[3].y)/4}]},
+    /* 좌하 */
+    { src:[{x:0,y:sh},{x:0,y:0},{x:sw/2,y:sh/2}],
+      dst:[dst[3],dst[0],{x:(dst[0].x+dst[1].x+dst[2].x+dst[3].x)/4,y:(dst[0].y+dst[1].y+dst[2].y+dst[3].y)/4}]}
+  ];
+
+  triangles.forEach(function(tri){
+    ctx.save();
+    /* 목적지 삼각형으로 클립 */
+    ctx.beginPath();
+    ctx.moveTo(tri.dst[0].x,tri.dst[0].y);
+    ctx.lineTo(tri.dst[1].x,tri.dst[1].y);
+    ctx.lineTo(tri.dst[2].x,tri.dst[2].y);
+    ctx.closePath();
+    ctx.clip();
+
+    /* 소스→목적지 affine 변환 행렬 */
+    var s=tri.src, d=tri.dst;
+    var m=solveAffine(s[0],s[1],s[2],d[0],d[1],d[2]);
+    if(m) ctx.transform(m[0],m[1],m[2],m[3],m[4],m[5]);
+    ctx.drawImage(canvas,0,0);
+    ctx.restore();
+  });
+
+  ctx.restore();
+}
+
+/* affine 변환 행렬 계산 (3점 → 3점) */
+function solveAffine(s0,s1,s2,d0,d1,d2){
+  var x0=s0.x,y0=s0.y,x1=s1.x,y1=s1.y,x2=s2.x,y2=s2.y;
+  var det=x0*(y1-y2)+x1*(y2-y0)+x2*(y0-y1);
+  if(Math.abs(det)<1e-10) return null;
+  var a=(d0.x*(y1-y2)+d1.x*(y2-y0)+d2.x*(y0-y1))/det;
+  var b=(d0.x*(x2-x1)+d1.x*(x0-x2)+d2.x*(x1-x0))/det;
+  var c=(d0.x*(x1*y2-x2*y1)+d1.x*(x2*y0-x0*y2)+d2.x*(x0*y1-x1*y0))/det;
+  var d=(d0.y*(y1-y2)+d1.y*(y2-y0)+d2.y*(y0-y1))/det;
+  var e=(d0.y*(x2-x1)+d1.y*(x0-x2)+d2.y*(x1-x0))/det;
+  var f=(d0.y*(x1*y2-x2*y1)+d1.y*(x2*y0-x0*y2)+d2.y*(x0*y1-x1*y0))/det;
+  return [a,d,b,e,c,f];
 }
 
 /* ── 손 감지 결과 처리 ── */
@@ -745,38 +846,28 @@ function onHandResults(results){
 
   camCtx.clearRect(0,0,cw,ch);
 
-  /* 웹캠 배경 */
+  /* 웹캠 배경 — 비율 유지 */
   camCtx.save();
   camCtx.scale(-1,1);
   camCtx.translate(-cw,0);
-  camCtx.drawImage(video,0,0,cw,ch);
+  var vw2=video.videoWidth||cw, vh2=video.videoHeight||ch;
+  var sc2=Math.max(cw/vw2,ch/vh2);
+  var dw2=vw2*sc2,dh2=vh2*sc2;
+  camCtx.drawImage(video,(cw-dw2)/2,(ch-dh2)/2,dw2,dh2);
   camCtx.restore();
 
   if(results.multiHandLandmarks&&results.multiHandLandmarks.length>0){
     if(guide) guide.style.opacity='0';
     var landmarks=results.multiHandLandmarks[0];
 
-    /* 손 bbox */
-    var xs=landmarks.map(function(l){return(1-l.x)*cw;});
-    var ys=landmarks.map(function(l){return l.y*ch;});
-    var minX=Math.min.apply(null,xs),maxX=Math.max.apply(null,xs);
-    var minY=Math.min.apply(null,ys),maxY=Math.max.apply(null,ys);
-    var pad=28;
-    var bx=minX-pad,by=minY-pad,bw=(maxX-minX)+pad*2,bh=(maxY-minY)+pad*2;
-
-    /* 손 실루엣 클립 → 패턴 타투 */
-    camCtx.save();
-    drawHandMask(camCtx,landmarks,cw,ch);
-    camCtx.clip();
-    camCtx.globalAlpha=0.82;
-    camCtx.drawImage(canvas,bx,by,bw,bh);
-    camCtx.restore();
+    /* perspective warp으로 패턴을 손 평면에 맞춤 */
+    warpPatternToHand(camCtx,landmarks,cw,ch);
 
     /* 손 테두리 */
     camCtx.save();
     drawHandMask(camCtx,landmarks,cw,ch);
-    camCtx.strokeStyle='rgba(255,255,255,0.2)';
-    camCtx.lineWidth=2;
+    camCtx.strokeStyle='rgba(255,255,255,0.15)';
+    camCtx.lineWidth=1.5;
     camCtx.stroke();
     camCtx.restore();
 
@@ -939,7 +1030,7 @@ if(window.ResizeObserver)new ResizeObserver(function(){resize();if(stream)resize
     var upC=document.getElementById('up-canvas');
     upC.width=mainC.width; upC.height=mainC.height;
     var uc=upC.getContext('2d');
-    uc.fillStyle='#000'; uc.fillRect(0,0,upC.width,upC.height);
+    uc.clearRect(0,0,upC.width,upC.height); /* 배경 투명 */
     uc.drawImage(mainC,0,0);
     document.getElementById('name-input').value='';
     document.getElementById('desc-input').value='';
@@ -967,7 +1058,7 @@ if(window.ResizeObserver)new ResizeObserver(function(){resize();if(stream)resize
     tmp.width=upC.width;
     tmp.height=upC.height;
     var tc=tmp.getContext('2d');
-    tc.fillStyle='#000'; tc.fillRect(0,0,tmp.width,tmp.height);
+    tc.clearRect(0,0,tmp.width,tmp.height); /* 배경 투명 */
     tc.drawImage(upC,0,0,tmp.width,tmp.height);
     pendingImage=tmp.toDataURL('image/png');
     pendingName=name;
@@ -982,49 +1073,86 @@ if(window.ResizeObserver)new ResizeObserver(function(){resize();if(stream)resize
   /* 2단계: 위치 선택 모드 */
   function startPlacing(){
     var world=document.getElementById('wm-world');
-    var items=document.getElementById('wm-items');
+    var previewW=22;
 
-    /* 안내 오버레이 */
     var guide=document.createElement('div');
     guide.id='place-guide';
     guide.style.cssText='position:absolute;inset:0;z-index:50;cursor:crosshair;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center;padding-bottom:28px;';
     guide.innerHTML='<div style="background:rgba(0,0,0,.85);border:0.5px solid #333;border-radius:24px;padding:10px 20px;font-family:-apple-system,sans-serif;font-size:13px;color:#ccc;">놓고 싶은 곳을 탭해서 위치를 정해주세요</div>';
 
-    /* 미리보기 이미지 — 손가락 따라다님 */
     var preview=document.createElement('img');
     preview.src=pendingImage;
-    preview.style.cssText='position:absolute;width:22%;border-radius:6px;opacity:.7;pointer-events:none;display:none;transform:translate(-50%,-50%);z-index:51;box-shadow:0 0 0 2px #0a84ff88;';
+    preview.style.cssText='position:absolute;width:22%;border-radius:6px;opacity:.7;pointer-events:none;display:none;transform:translate(-50%,-50%);z-index:51;box-shadow:0 0 0 2px #0a84ff88;image-rendering:high-quality;transition:width .1s;';
     guide.appendChild(preview);
     world.appendChild(guide);
 
-    /* 마우스/터치 이동 — 미리보기 따라오기 */
     function onMove(e){
       var r=world.getBoundingClientRect();
       var cx=e.touches?e.touches[0].clientX:e.clientX;
       var cy=e.touches?e.touches[0].clientY:e.clientY;
-      var px=cx-r.left, py=cy-r.top;
-      preview.style.left=px+'px';
-      preview.style.top=py+'px';
+      preview.style.left=(cx-r.left)+'px';
+      preview.style.top=(cy-r.top)+'px';
       preview.style.display='block';
     }
     guide.addEventListener('mousemove',onMove);
     guide.addEventListener('touchmove',function(e){e.preventDefault();onMove(e);},{passive:false});
 
-    /* 탭 — 위치 확정 */
     function onTap(e){
       e.preventDefault();
+      guide.removeEventListener('click',onTap);
+      guide.removeEventListener('touchend',onTap);
       var r=world.getBoundingClientRect();
       var cx=e.touches?e.changedTouches[0].clientX:e.clientX;
       var cy=e.touches?e.changedTouches[0].clientY:e.clientY;
-      var px=cx-r.left, py=cy-r.top;
-      var xPct=parseFloat(((px/r.width)*100).toFixed(2));
-      var yPct=parseFloat(((py/r.height)*100).toFixed(2));
-      /* 가장자리 보정 */
-      xPct=Math.max(2,Math.min(xPct,78));
-      yPct=Math.max(2,Math.min(yPct,80));
-      confirmPlace(xPct,yPct);
-      guide.removeEventListener('click',onTap);
-      guide.removeEventListener('touchend',onTap);
+      var chosenX=parseFloat(((cx-r.left)/r.width*100).toFixed(2));
+      var chosenY=parseFloat(((cy-r.top)/r.height*100).toFixed(2));
+      chosenX=Math.max(2,Math.min(chosenX,78));
+      chosenY=Math.max(2,Math.min(chosenY,80));
+
+      /* 안내 텍스트만 제거, preview는 world로 이동해 유지 */
+      guide.style.cursor='default';
+      guide.style.background='rgba(0,0,0,.1)';
+      var oldMsg=guide.querySelector('div');
+      if(oldMsg) oldMsg.parentNode.removeChild(oldMsg);
+      guide.removeChild(preview);
+      world.appendChild(preview);
+      preview.style.opacity='0.88';
+      /* transform:translate(-50%,-50%) 유지 — 중심 기준으로 고정 */
+      preview.style.left=(chosenX/100*r.width)+'px';
+      preview.style.top=(chosenY/100*r.height)+'px';
+      preview.style.transform='translate(-50%,-50%)';
+
+      var panel=document.createElement('div');
+      panel.style.cssText='position:absolute;bottom:28px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.9);border:0.5px solid #333;border-radius:16px;padding:14px 20px;font-family:-apple-system,sans-serif;display:flex;flex-direction:column;gap:12px;min-width:240px;z-index:52;';
+      panel.innerHTML=
+        '<p style="font-size:13px;color:#ccc;margin:0;text-align:center;">크기를 조절해주세요</p>'+
+        '<div style="display:flex;align-items:center;gap:10px;">'+
+          '<span style="font-size:11px;color:#555;">작게</span>'+
+          '<input id="place-size-range" type="range" min="6" max="65" value="22" style="flex:1;accent-color:#0a84ff;">'+
+          '<span style="font-size:11px;color:#555;">크게</span>'+
+        '</div>'+
+        '<div style="display:flex;gap:8px;">'+
+          '<button id="place-cancel" style="flex:1;background:transparent;border:0.5px solid #333;border-radius:8px;color:#666;font-size:12px;font-family:-apple-system,sans-serif;padding:9px;cursor:pointer;">취소</button>'+
+          '<button id="place-ok" style="flex:1;background:#0a84ff;border:none;border-radius:8px;color:#fff;font-size:12px;font-family:-apple-system,sans-serif;padding:9px;cursor:pointer;">월드에 놓기</button>'+
+        '</div>';
+      guide.appendChild(panel);
+
+      panel.querySelector('#place-size-range').addEventListener('input',function(){
+        previewW=+this.value;
+        preview.style.width=previewW+'%';
+      });
+      panel.querySelector('#place-ok').onclick=function(){
+        var g=document.getElementById('place-guide');
+        if(g)g.parentNode.removeChild(g);
+        if(preview.parentNode) preview.parentNode.removeChild(preview);
+        confirmPlace(chosenX,chosenY,previewW);
+      };
+      panel.querySelector('#place-cancel').onclick=function(){
+        var g=document.getElementById('place-guide');
+        if(g)g.parentNode.removeChild(g);
+        if(preview.parentNode) preview.parentNode.removeChild(preview);
+        pendingImage=null;pendingName=null;pendingDesc=null;
+      };
     }
     guide.addEventListener('click',onTap);
     guide.addEventListener('touchend',onTap,{passive:false});
@@ -1089,7 +1217,7 @@ if(window.ResizeObserver)new ResizeObserver(function(){resize();if(stream)resize
     img.src=imageUrl;
   }
 
-  function confirmPlace(xPct,yPct){
+  function confirmPlace(xPct,yPct,wPct){
     var g=document.getElementById('place-guide');
     if(g)g.parentNode.removeChild(g);
 
@@ -1103,7 +1231,7 @@ if(window.ResizeObserver)new ResizeObserver(function(){resize();if(stream)resize
         timestamp:Date.now(),
         brushNum:String((window._getCurrentBrush?window._getCurrentBrush():0)+1).padStart(2,'0'),
         brushRatio:ratio,
-        x:xPct, y:yPct, w:20
+        x:xPct, y:yPct, w:wPct||20
       });
       if(works.length>80)works=works.slice(-80);
       saveWorks(works);
@@ -1148,17 +1276,25 @@ if(window.ResizeObserver)new ResizeObserver(function(){resize();if(stream)resize
         'width:'+(w.w||18)+'%',
         'cursor:pointer',
         'transition:transform .12s',
-        'z-index:'+(10+i)
+        'z-index:'+(10+i),
+        'mix-blend-mode:screen'
       ].join(';');
 
       var img=document.createElement('img');
       img.src=w.image;
-      img.style.cssText='display:block;width:100%;border-radius:6px;image-rendering:high-quality;';
+      img.style.cssText='display:block;width:100%;image-rendering:high-quality;';
+      img.decoding='async';
       el.appendChild(img);
       container.appendChild(el);
 
       function showPanel(e){
         e.stopPropagation();
+        /* 이전 선택 강조 제거 */
+        document.querySelectorAll('.wm-selected').forEach(function(el2){el2.classList.remove('wm-selected');el2.style.outline='none';});
+        /* 현재 선택 강조 */
+        el.style.outline='2px solid rgba(255,255,255,0.5)';
+        el.style.outlineOffset='2px';
+        el.classList.add('wm-selected');
         var rect=el.getBoundingClientRect();
         var worldRect=document.getElementById('wm-world').getBoundingClientRect();
       var bx=(rect.left-worldRect.left-pz.x)/pz.scale;
@@ -1169,6 +1305,13 @@ if(window.ResizeObserver)new ResizeObserver(function(){resize();if(stream)resize
       }
       el.addEventListener('click',showPanel);
       el.addEventListener('touchend',function(e){e.preventDefault();showPanel(e);},{passive:false});
+
+      /* hover 오버레이 */
+      var overlay=document.createElement('div');
+      overlay.style.cssText='position:absolute;inset:0;background:rgba(255,255,255,0.12);opacity:0;transition:opacity .2s;pointer-events:none;border-radius:4px;';
+      el.appendChild(overlay);
+      el.addEventListener('mouseenter',function(){overlay.style.opacity='1';});
+      el.addEventListener('mouseleave',function(){overlay.style.opacity='0';});
     });
 
     document.getElementById('wm-world').onclick=function(e){
@@ -1341,7 +1484,7 @@ if(window.ResizeObserver)new ResizeObserver(function(){resize();if(stream)resize
 
     panel.innerHTML=
       '<div style="display:flex;align-items:center;gap:9px;margin-bottom:12px;">'+
-        '<div style="width:28px;height:28px;border-radius:50%;overflow:hidden;flex-shrink:0;border:0.5px solid #2a2a2a;">'+
+        '<div style="width:28px;height:28px;border-radius:50%;overflow:hidden;flex-shrink:0;border:0.5px solid #2a2a2a;background:repeating-conic-gradient(#1a1a1a 0% 25%,#111 0% 50%) 0 0/8px 8px;">'+
           '<img src="'+w.image+'" style="width:100%;height:100%;object-fit:cover;"/>'+
         '</div>'+
         '<p style="font-size:14px;font-weight:500;color:#fff;font-family:-apple-system,sans-serif;margin:0;line-height:1.3;">'+escP(w.name)+'</p>'+
@@ -1374,6 +1517,7 @@ if(window.ResizeObserver)new ResizeObserver(function(){resize();if(stream)resize
     function hidePanel(){
     var p=document.getElementById('detail-panel');
     if(p) p.parentNode.removeChild(p);
+    document.querySelectorAll('.wm-selected').forEach(function(el2){el2.classList.remove('wm-selected');el2.style.outline='none';});
   }
 
   function escP(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
