@@ -34,8 +34,6 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;touch-action:no
 #cam-bar{position:absolute;bottom:0;left:0;right:0;padding:16px;display:flex;justify-content:center;gap:16px;background:linear-gradient(transparent,rgba(0,0,0,.7));}
 .cam-btn{background:rgba(44,44,46,.9);border:0.5px solid #3a3a3c;border-radius:24px;color:#fff;font-size:14px;font-family:-apple-system,sans-serif;padding:10px 22px;cursor:pointer;}
 .cam-btn.primary{background:#0a84ff;border-color:#0a84ff;}
-.cam-mode-btn{font-size:12px;padding:8px 14px;opacity:0.6;}
-.cam-mode-btn.active{opacity:1;border-color:#0a84ff;color:#0a84ff;}
 #opacity-ctrl{display:flex;align-items:center;gap:10px;}
 #opacity-ctrl span{font-size:12px;color:#aaa;font-family:-apple-system,sans-serif;}
 #ov-slider{-webkit-appearance:none;appearance:none;width:100px;height:3px;border-radius:2px;background:#3a3a3c;outline:none;}
@@ -181,12 +179,7 @@ html,body{width:100%;height:100%;background:#000;overflow:hidden;touch-action:no
       <!-- 하단 컨트롤 -->
       <div id="cam-bar">
         <button class="cam-btn" onclick="closeCam()">← 돌아가기</button>
-        <div style="display:flex;gap:6px;">
-          <button class="cam-btn cam-mode-btn active" id="mode-tattoo" onclick="setCamMode('tattoo')">타투</button>
-          <button class="cam-btn cam-mode-btn" id="mode-glass" onclick="setCamMode('glass')">유리닦기</button>
-          <button class="cam-btn cam-mode-btn" id="mode-stamp" onclick="setCamMode('stamp')">손자국</button>
-          <button class="cam-btn cam-mode-btn" id="mode-drop" onclick="setCamMode('drop')">물방울</button>
-        </div>
+
         <button class="cam-btn primary" onclick="saveShot()">저장</button>
       </div>
     </div>
@@ -729,154 +722,13 @@ function camLoop(){
 /* ══════════════════════════════
    캠 인터랙션 모드 시스템
 ══════════════════════════════ */
-var camMode='tattoo'; /* tattoo / glass / stamp / drop */
+var camMode='drop'; /* tattoo / glass / stamp / drop */
 
 /* 모드별 상태 */
-var glassCanvas=null; /* 유리닦기 — 닦인 영역 마스크 */
-var stamps=[]; /* 손자국 쌓임 */
 var drops=[]; /* 물방울 파티클 */
 var prevHandPos=null; /* 이전 손 위치 */
 
-function setCamMode(mode){
-  camMode=mode;
-  /* 버튼 강조 */
-  document.querySelectorAll('.cam-mode-btn').forEach(function(b){b.classList.remove('active');});
-  var btn=document.getElementById('mode-'+mode);
-  if(btn) btn.classList.add('active');
-  /* 상태 초기화 */
-  if(mode==='glass'){
-    glassCanvas=document.createElement('canvas');
-    glassCanvas.width=camCanvas.width;
-    glassCanvas.height=camCanvas.height;
-  }
-  if(mode==='stamp') stamps=[];
-  if(mode==='drop') drops=[];
-  prevHandPos=null;
-}
-window.setCamMode=setCamMode;
 
-/* ── 유리닦기 ── */
-function renderGlass(landmarks,cw,ch){
-  if(!glassCanvas||glassCanvas.width!==cw||glassCanvas.height!==ch){
-    glassCanvas=document.createElement('canvas');
-    glassCanvas.width=cw; glassCanvas.height=ch;
-  }
-  var gc=glassCanvas.getContext('2d');
-
-  /* 닦인 영역 누적 */
-  gc.save();
-  drawHandMask(gc,landmarks,cw,ch);
-  gc.fillStyle='rgba(255,255,255,1)';
-  gc.fill();
-  gc.restore();
-
-  /* 1. 전체에 흐린 안개 레이어 */
-  camCtx.save();
-  camCtx.fillStyle='rgba(30,30,40,0.82)';
-  camCtx.fillRect(0,0,cw,ch);
-  camCtx.restore();
-
-  /* 2. 닦인 영역 = 웹캠이 보이는 창문 */
-  var tmp=document.createElement('canvas');
-  tmp.width=cw; tmp.height=ch;
-  var tc=tmp.getContext('2d');
-  /* 닦인 마스크 */
-  tc.drawImage(glassCanvas,0,0);
-  tc.globalCompositeOperation='source-in';
-  /* 웹캠 그대로 */
-  tc.save();
-  tc.scale(-1,1); tc.translate(-cw,0);
-  tc.drawImage(video,0,0,cw,ch);
-  tc.restore();
-  camCtx.drawImage(tmp,0,0);
-
-  /* 3. 닦인 영역에 패턴 살짝 오버레이 */
-  var tmp2=document.createElement('canvas');
-  tmp2.width=cw; tmp2.height=ch;
-  var tc2=tmp2.getContext('2d');
-  tc2.drawImage(glassCanvas,0,0);
-  tc2.globalCompositeOperation='source-in';
-  tc2.globalAlpha=0.45;
-  tc2.drawImage(canvas,0,0,cw,ch);
-  camCtx.drawImage(tmp2,0,0);
-
-  /* 4. 닦는 손 테두리 */
-  camCtx.save();
-  drawHandMask(camCtx,landmarks,cw,ch);
-  camCtx.strokeStyle='rgba(180,220,255,0.6)';
-  camCtx.lineWidth=3;
-  camCtx.stroke();
-  camCtx.restore();
-
-  /* 5. 안개 가장자리 물기 */
-  camCtx.save();
-  drawHandMask(camCtx,landmarks,cw,ch);
-  camCtx.shadowColor='rgba(180,220,255,0.8)';
-  camCtx.shadowBlur=18;
-  camCtx.strokeStyle='rgba(180,220,255,0.3)';
-  camCtx.lineWidth=8;
-  camCtx.stroke();
-  camCtx.restore();
-}
-
-/* ── 손자국 ── */
-function renderStamp(landmarks,cw,ch){
-  var palm=landmarks[9];
-  var hx=(1-palm.x)*cw, hy=palm.y*ch;
-
-  /* 손이 충분히 움직이면 새 스탬프 */
-  var dist=prevHandPos?Math.hypot(hx-prevHandPos.x,hy-prevHandPos.y):999;
-  if(dist>30){
-    stamps.push({
-      lm:landmarks.map(function(l){return{x:l.x,y:l.y,z:l.z};}),
-      born:Date.now()
-    });
-    if(stamps.length>20) stamps.shift();
-    prevHandPos={x:hx,y:hy};
-  }
-
-  /* 쌓인 손자국 */
-  var now=Date.now();
-  stamps.forEach(function(s){
-    var age=(now-s.born)/5000; /* 5초 동안 유지 */
-    if(age>1) return;
-    var a=0.7*(1-age);
-
-    /* 패턴을 손 마스크로 클립 */
-    camCtx.save();
-    drawHandMaskFromSnapshot(camCtx,s.lm,cw,ch);
-    camCtx.clip();
-    camCtx.globalAlpha=a;
-    camCtx.drawImage(canvas,0,0,cw,ch);
-    camCtx.restore();
-
-    /* 윤곽선 */
-    camCtx.save();
-    drawHandMaskFromSnapshot(camCtx,s.lm,cw,ch);
-    camCtx.strokeStyle='rgba(255,255,255,'+(a*0.5)+')';
-    camCtx.lineWidth=2;
-    camCtx.stroke();
-    camCtx.restore();
-  });
-
-  /* 현재 손 — 타투 */
-  camCtx.save();
-  drawHandMask(camCtx,landmarks,cw,ch);
-  camCtx.clip();
-  camCtx.globalAlpha=0.85;
-  camCtx.drawImage(canvas,0,0,cw,ch);
-  camCtx.restore();
-}
-
-function drawHandMaskFromSnapshot(ctx,lm,cw,ch){
-  var outline=[0,1,2,3,4,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5];
-  ctx.beginPath();
-  outline.forEach(function(i,idx){
-    var x=(1-lm[i].x)*cw, y=lm[i].y*ch;
-    if(idx===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-  });
-  ctx.closePath();
-}
 
 /* ── 물방울 ── */
 function renderDrop(landmarks,cw,ch){
@@ -969,11 +821,108 @@ function renderDrop(landmarks,cw,ch){
     }
   });
 
-  /* 현재 손 — 타투 */
+  /* 손 — 삼각형 메시 타투 (마디별로 구부러짐) */
+  renderHandMesh(landmarks,cw,ch);
+}
+
+/* ── 손 삼각형 메시 타투 ── */
+function renderHandMesh(landmarks,cw,ch){
+  function lp(i){return{x:(1-landmarks[i].x)*cw,y:landmarks[i].y*ch};}
+
+  /* 손가락별 마디 인덱스 */
+  var fingers=[
+    [0,1,2,3,4],   /* 엄지 */
+    [0,5,6,7,8],   /* 검지 */
+    [0,9,10,11,12],/* 중지 */
+    [0,13,14,15,16],/* 약지 */
+    [0,17,18,19,20] /* 새끼 */
+  ];
+
+  /* 손바닥 중심 */
+  var palmPts=[0,1,5,9,13,17].map(lp);
+  var palmCx=palmPts.reduce(function(s,p){return s+p.x;},0)/palmPts.length;
+  var palmCy=palmPts.reduce(function(s,p){return s+p.y;},0)/palmPts.length;
+  var palmC={x:palmCx,y:palmCy};
+
+  /* 패턴 소스 정규화 함수 */
+  var sw=canvas.width, sh=canvas.height;
+  function srcPt(p){
+    /* 손 전체 bbox 기준으로 패턴 좌표 계산 */
+    var xs=[];var ys=[];
+    for(var i=0;i<21;i++){xs.push((1-landmarks[i].x)*cw);ys.push(landmarks[i].y*ch);}
+    var mnX=Math.min.apply(null,xs),mxX=Math.max.apply(null,xs);
+    var mnY=Math.min.apply(null,ys),mxY=Math.max.apply(null,ys);
+    var nx=(p.x-mnX)/(mxX-mnX+1);
+    var ny=(p.y-mnY)/(mxY-mnY+1);
+    return{x:nx*sw, y:ny*sh};
+  }
+
+  /* 손 전체 마스크 먼저 클립 */
   camCtx.save();
   drawHandMask(camCtx,landmarks,cw,ch);
-  camCtx.clip();camCtx.globalAlpha=0.75;
-  camCtx.drawImage(canvas,0,0,cw,ch);
+  camCtx.clip();
+  camCtx.globalAlpha=0.82;
+
+  /* 각 손가락 마디별 삼각형 그리기 */
+  fingers.forEach(function(finger){
+    for(var seg=0;seg<finger.length-2;seg++){
+      var a,b,c,d2;
+      if(seg===0){
+        /* 손바닥 → 첫 마디: 손바닥 중심 포함 삼각형 */
+        a=lp(finger[1]);
+        b=lp(finger[Math.min(finger.length-1,2)]);
+        var adj=finger===fingers[0]?lp(finger[2]):palmC;
+        drawTrianglePatch(a,b,adj,srcPt(a),srcPt(b),srcPt(adj));
+      }
+      a=lp(finger[seg+1]);
+      b=lp(finger[Math.min(seg+2,finger.length-1)]);
+      /* 마디 너비 보정 */
+      var perp=perpOffset(a,b,8*(1-seg*0.15));
+      var al={x:a.x-perp.x,y:a.y-perp.y};
+      var ar={x:a.x+perp.x,y:a.y+perp.y};
+      var bl={x:b.x-perp.x,y:b.y-perp.y};
+      var br={x:b.x+perp.x,y:b.y+perp.y};
+      drawTrianglePatch(al,ar,bl,srcPt(al),srcPt(ar),srcPt(bl));
+      drawTrianglePatch(ar,br,bl,srcPt(ar),srcPt(br),srcPt(bl));
+    }
+  });
+
+  /* 손바닥 중앙 채우기 */
+  var palmRing=[0,1,5,9,13,17,0].map(lp);
+  for(var pi=0;pi<palmRing.length-2;pi++){
+    drawTrianglePatch(palmC,palmRing[pi],palmRing[pi+1],
+      srcPt(palmC),srcPt(palmRing[pi]),srcPt(palmRing[pi+1]));
+  }
+
+  camCtx.restore();
+
+  /* 손 윤곽 */
+  camCtx.save();
+  drawHandMask(camCtx,landmarks,cw,ch);
+  camCtx.strokeStyle='rgba(255,255,255,0.18)';
+  camCtx.lineWidth=1.5;
+  camCtx.stroke();
+  camCtx.restore();
+}
+
+function perpOffset(a,b,dist){
+  var dx=b.x-a.x,dy=b.y-a.y;
+  var len=Math.hypot(dx,dy)||1;
+  return{x:-dy/len*dist,y:dx/len*dist};
+}
+
+function drawTrianglePatch(d0,d1,d2,s0,s1,s2){
+  var m=solveAffine(s0,s1,s2,d0,d1,d2);
+  if(!m) return;
+  camCtx.save();
+  camCtx.beginPath();
+  camCtx.moveTo(d0.x,d0.y);
+  camCtx.lineTo(d1.x,d1.y);
+  camCtx.lineTo(d2.x,d2.y);
+  camCtx.closePath();
+  camCtx.clip();
+  camCtx.transform(m[0],m[1],m[2],m[3],m[4],m[5]);
+  camCtx.drawImage(canvas,0,0);
   camCtx.restore();
 }
 
@@ -1117,21 +1066,7 @@ function onHandResults(results){
     if(guide) guide.style.opacity='0';
     var landmarks=results.multiHandLandmarks[0];
 
-    if(camMode==='tattoo'){
-      warpPatternToHand(camCtx,landmarks,cw,ch);
-      camCtx.save();
-      drawHandMask(camCtx,landmarks,cw,ch);
-      camCtx.strokeStyle='rgba(255,255,255,0.15)';
-      camCtx.lineWidth=1.5;
-      camCtx.stroke();
-      camCtx.restore();
-    } else if(camMode==='glass'){
-      renderGlass(landmarks,cw,ch);
-    } else if(camMode==='stamp'){
-      renderStamp(landmarks,cw,ch);
-    } else if(camMode==='drop'){
-      renderDrop(landmarks,cw,ch);
-    }
+    renderDrop(landmarks,cw,ch);
 
   } else {
     if(guide) guide.style.opacity='1';
