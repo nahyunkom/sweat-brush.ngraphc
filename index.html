@@ -1801,6 +1801,37 @@ if(window.ResizeObserver)new ResizeObserver(function(){resize();if(stream)resize
     </div>
   </div>
 </div>
+<style>
+/* 세로 모니터 → 웹캠 자동 전체화면 */
+@media (orientation: portrait) {
+  #topbar { display: none !important; }
+  #sidebar { display: none !important; }
+  #cw { left: 0 !important; top: 0 !important; }
+  #cam-wrap { display: flex !important; }
+  #cam-bar { display: none !important; }
+  #cam-guide { display: flex !important; }
+}
+</style>
 
+<script>
+// 세로 화면이면 자동으로 웹캠 켜기
+(function() {
+  function checkOrientation() {
+    if (window.innerHeight > window.innerWidth) {
+      var vid = document.getElementById('cam-video');
+      if (vid && !vid.srcObject) {
+        openCam();
+      }
+    }
+  }
+  window.addEventListener('resize', checkOrientation);
+  // DOM 완전히 로드 후 실행
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkOrientation);
+  } else {
+    setTimeout(checkOrientation, 500);
+  }
+})();
+</script>
 </body>
 </html>
